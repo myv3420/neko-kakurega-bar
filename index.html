@@ -3456,6 +3456,51 @@
       return list[Math.floor(Math.random()*list.length)];
     }
 
+    /* ---------- 常連メモ連動の注文 ----------
+       掲示板の常連メモの「合う味」（taste）を代表する素材。メモの子
+       本人の注文は、合う味を含むレシピの中でも、この素材を含む
+       レシピを優先して選ぶ（例：花の香り→さくらリキュール） */
+    var MEMO_TASTE_ING = {
+      floral:    { kind:'base',  id:'sakura' },    /* 花の香り */
+      sweet:     { kind:'mixer', id:'honey' },     /* 甘い */
+      bitter:    { kind:'base',  id:'coffee' },    /* ほろ苦い */
+      spicy:     { kind:'mixer', id:'ginger' },    /* ピリッと */
+      soursweet: { kind:'mixer', id:'berry' },     /* 甘酸っぱい */
+      sparkle:   { kind:'base',  id:'hoshikuzu' }, /* キラキラ */
+      adult:     { kind:'base',  id:'matatabi' },  /* マタタビの香り */
+      warm:      { kind:'base',  id:'milk' },      /* 温まる・まろやか */
+      fresh:     { kind:'mixer', id:'lemon' },     /* すっきり */
+      umami:     { kind:'snack', id:'fish' }       /* うまみ */
+    };
+    /* メモの合う味に連動した注文レシピを選ぶ：今作れる（解放済みの）
+       レシピの中から合う味を含むものを候補にし、代表素材を含むもの
+       と在庫のあるものを優先する（pickOrder と同じ優先の考え方）。
+       候補が店内の他のお客さんの注文と重なる場合は、重ならない候補
+       を優先する。合う味を含む作れるレシピが1つもなければ null を
+       返し、呼び出し側は通常の注文抽選にフォールバックする */
+    function pickMemoRecipe(md){
+      if (!md || !md.taste) return null;
+      var all = listableRecipes().filter(function(r){
+        return drinkTasteKeys(r).indexOf(md.taste) !== -1;
+      });
+      if (!all.length) return null;
+      var used = {};
+      occupants.forEach(function(o){ if (o) used[o.orderId] = true; });
+      var fresh = all.filter(function(r){ return !used[r.id]; });
+      var pool = fresh.length ? fresh : all;
+      var rep = MEMO_TASTE_ING[md.taste];
+      function score(r){
+        var s = 0;
+        if (rep && r[rep.kind] === rep.id) s += 2;
+        if (comboInStock(r)) s += 1;
+        return s;
+      }
+      var best = -1;
+      pool.forEach(function(r){ var s = score(r); if (s > best) best = s; });
+      var top = pool.filter(function(r){ return score(r) === best; });
+      return top[Math.floor(Math.random()*top.length)];
+    }
+
     /* ---------- 注文タイプ：通常／きまぐれ／こだわり／お悩み相談 ----------
        配分は通常72%・きまぐれ10%・こだわり10%・お悩み相談8%を目安に、
        相談は通常注文の枠から少しだけ置き換える形にする。
@@ -4203,21 +4248,35 @@
           storyEp = st0.ep;
         }
       }
-      var ord = storyEp
-        ? { type:'story', ep:storyEp, text:'連続相談 第' + storyEp + '話' }
-        : makeOrderFor(type); /* 注文タイプ（通常／きまぐれ／こだわり／相談）つきの注文。傾向は猫ごとに付く */
-      var seat = SEATS[seatIdx];
       /* VIP猫は来店ごとのランダム名ではなく、常に固有の名前で表示する。
          掲示板メモの優先抽選が当たった来店は、メモの子本人として来店
          させるため、表示名を必ずメモの子の名前にする（ランダム名に
          しない）。万一その名前を店内の子が既に使っていたら、重複回避
-         を優先して通常のランダム名に戻す */
+         を優先して通常のランダム名に戻す。
+         来店名は注文の決定より先に確定させる：メモの子本人かどうかは
+         「品種＋名前」で判定し、その判定を注文にも連動させるため */
       var forcedMemoName = pendingMemoVisitName;
       pendingMemoVisitName = null;
       var memoNameInUse = !!forcedMemoName && occupants.some(function(o){ return !!o && o.name === forcedMemoName; });
       var visitName = (type.vip && type.fixedName) ? type.fixedName
         : (forcedMemoName && !memoNameInUse) ? forcedMemoName
         : pickVisitName(); /* この来店での名前（種類とは別に個体を区別） */
+      var ord = storyEp
+        ? { type:'story', ep:storyEp, text:'連続相談 第' + storyEp + '話' }
+        : makeOrderFor(type); /* 注文タイプ（通常／きまぐれ／こだわり／相談）つきの注文。傾向は猫ごとに付く */
+      /* 掲示板の常連メモの子本人（品種＋名前が一致し、📌タグが付く
+         来店）は、メモの「合う味」に連動したレシピ注文にする：今作れる
+         レシピの中から合う味を含むものを選び、その味を代表する素材を
+         含むレシピを優先する（pickMemoRecipe）。合う味のレシピが1つも
+         作れなければ、上の通常の注文抽選のままにする。表示は通常の
+         レシピ注文と同じ形で、📌タグも従来通り付く。注文どおりに
+         出せば、その一杯は合う味を含むので、既存の解決判定
+         （boardCheckMemoSolve）でメモが解決する流れになる */
+      if (!storyEp && isBoardMemoVisit(type.id, visitName)){
+        var memoRecipe = pickMemoRecipe(boardMemoTarget());
+        if (memoRecipe) ord = { type:'normal', recipeId: memoRecipe.id };
+      }
+      var seat = SEATS[seatIdx];
       var flip = Math.random() < 0.5; /* この来店での着席の向き */
       var el = document.createElement('button');
       el.className = 'cat';
