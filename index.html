@@ -2933,12 +2933,17 @@
     document.addEventListener('pagehide', saveNow);
     document.addEventListener('visibilitychange', function(){ if (document.hidden) saveNow(); });
     /* ---------- セーブのバックアップ（書き出し・読み込み） ----------
-       セーブ全体を「NKBR1.」で始まる1つの文字列（バックアップコード）に
-       変換する。中身はチェックサム付きJSONをBase64化したもの。
-       読み込み時は接頭辞・中身の印・チェックサム・最低限の構造を
-       検証し、すべて通ったコードだけを復元対象にする（不正なコード
-       では今のセーブを上書きしない） */
+       セーブ全体を1つの文字列（バックアップコード）に変換する。
+       書き出しは新形式「NKBR2.」：チェックサム付きJSONを deflate 圧縮
+       （CompressionStream）してから Base64URL 化したもので、旧形式より
+       大幅に短い。圧縮が使えない環境では旧形式「NKBR1.」（無圧縮の
+       Base64）にフォールバックする。
+       読み込みは新旧どちらの形式も受け付ける。接頭辞・中身の印・
+       チェックサム・最低限の構造を検証し、すべて通ったコードだけを
+       復元対象にする（不正なコードでは今のセーブを上書きしない）。
+       圧縮・展開は非同期のため、書き出し・読み込みとも Promise を返す */
     var BACKUP_PREFIX = 'NKBR1.';
+    var BACKUP_PREFIX2 = 'NKBR2.';
     function backupChecksum(str){
       var h = 0x811c9dc5;
       for (var i = 0; i < str.length; i++){
@@ -2946,24 +2951,89 @@
       }
       return ('0000000' + h.toString(16)).slice(-8);
     }
+    /* バイト列 ⇄ Base64URL（URLセーフ・パディングなし） */
+    function bytesToBase64Url(bytes){
+      var bin = '';
+      var CHUNK = 0x8000;
+      for (var i = 0; i < bytes.length; i += CHUNK){
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+      }
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function base64UrlToBytes(str){
+      var b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      var bin = atob(b64);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+    /* CompressionStream / DecompressionStream で deflate 圧縮・展開する */
+    function backupTransform(bytes, StreamCtor){
+      return new Promise(function(resolve, reject){
+        var stream = new StreamCtor('deflate');
+        var chunks = [], total = 0;
+        var reader = stream.readable.getReader();
+        (function pump(){
+          reader.read().then(function(r){
+            if (r.done){
+              var out = new Uint8Array(total), pos = 0;
+              for (var i = 0; i < chunks.length; i++){ out.set(chunks[i], pos); pos += chunks[i].length; }
+              resolve(out);
+            } else { chunks.push(r.value); total += r.value.length; pump(); }
+          }, reject);
+        })();
+        var writer = stream.writable.getWriter();
+        writer.write(bytes).then(function(){ return writer.close(); }).then(function(){}, reject);
+      });
+    }
+    /* 書き出し：新形式（圧縮）のコードを Promise で返す。
+       圧縮が使えない・失敗した場合は旧形式にフォールバックする */
     function makeBackupCode(){
       saveNow(); /* 保留中の変更も含め、最新の状態を書き出す */
       var dataJson = JSON.stringify(state);
-      var env = { app:'nekoKakuregaBar', kind:'backup', ver:1, savedAt:new Date().toISOString(), sum:backupChecksum(dataJson), data:state };
-      return BACKUP_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(env))));
+      var sum = backupChecksum(dataJson);
+      function legacyCode(){
+        var env = { app:'nekoKakuregaBar', kind:'backup', ver:1, savedAt:new Date().toISOString(), sum:sum, data:state };
+        return BACKUP_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(env))));
+      }
+      if (typeof CompressionStream === 'undefined' || typeof TextEncoder === 'undefined'){
+        return Promise.resolve(legacyCode());
+      }
+      var env = { app:'nekoKakuregaBar', kind:'backup', ver:2, savedAt:new Date().toISOString(), sum:sum, data:state };
+      var bytes = new TextEncoder().encode(JSON.stringify(env));
+      return backupTransform(bytes, CompressionStream).then(function(comp){
+        return BACKUP_PREFIX2 + bytesToBase64Url(comp);
+      }).catch(function(){ return legacyCode(); });
     }
-    /* バックアップコードを検証してセーブデータを返す。不正なら null */
+    /* バックアップコードを検証してセーブデータを Promise で返す。
+       不正なら null（新形式 NKBR2. と旧形式 NKBR1. の両方に対応） */
     function parseBackupCode(code){
-      if (typeof code !== 'string') return null;
+      if (typeof code !== 'string') return Promise.resolve(null);
       var s = code.replace(/\s+/g, '');
-      if (s.indexOf(BACKUP_PREFIX) !== 0) return null;
-      var env = null;
-      try { env = JSON.parse(decodeURIComponent(escape(atob(s.slice(BACKUP_PREFIX.length))))); } catch(e){ return null; }
-      if (!env || env.app !== 'nekoKakuregaBar' || env.kind !== 'backup') return null;
-      if (!env.data || Object.prototype.toString.call(env.data) !== '[object Object]') return null;
-      if (typeof env.data.v !== 'number' || typeof env.data.coins !== 'number' || typeof env.data.night !== 'number') return null;
-      if (env.sum !== backupChecksum(JSON.stringify(env.data))) return null;
-      return env.data;
+      function validate(env){
+        if (!env || env.app !== 'nekoKakuregaBar' || env.kind !== 'backup') return null;
+        if (!env.data || Object.prototype.toString.call(env.data) !== '[object Object]') return null;
+        if (typeof env.data.v !== 'number' || typeof env.data.coins !== 'number' || typeof env.data.night !== 'number') return null;
+        if (env.sum !== backupChecksum(JSON.stringify(env.data))) return null;
+        return env.data;
+      }
+      if (s.indexOf(BACKUP_PREFIX2) === 0){
+        if (typeof DecompressionStream === 'undefined' || typeof TextDecoder === 'undefined') return Promise.resolve(null);
+        var comp = null;
+        try { comp = base64UrlToBytes(s.slice(BACKUP_PREFIX2.length)); } catch(e){ return Promise.resolve(null); }
+        return backupTransform(comp, DecompressionStream).then(function(out){
+          var env = null;
+          try { env = JSON.parse(new TextDecoder().decode(out)); } catch(e){ return null; }
+          return validate(env);
+        }).catch(function(){ return null; });
+      }
+      if (s.indexOf(BACKUP_PREFIX) === 0){
+        var env1 = null;
+        try { env1 = JSON.parse(decodeURIComponent(escape(atob(s.slice(BACKUP_PREFIX.length))))); } catch(e){ return Promise.resolve(null); }
+        return Promise.resolve(validate(env1));
+      }
+      return Promise.resolve(null);
     }
     /* ---------- DOM参照ヘルパー ----------
        migrateState() の掲示板移行（boardRefresh → updateBoardBadge）が
@@ -8648,76 +8718,87 @@
         };
         var bkExport = $('backupExportBtn');
         if (bkExport && bkArea) bkExport.addEventListener('click', function(){
-          bkArea.value = makeBackupCode();
-          bkArea.focus(); bkArea.select();
-          bkShowMsg('書き出しました。このコードをメモ帳などに控えておいてください。', true);
+          makeBackupCode().then(function(code){
+            bkArea.value = code;
+            bkArea.focus(); bkArea.select();
+            bkShowMsg('書き出しました。このコードをメモ帳などに控えておいてください。', true);
+          });
         });
         var bkCopy = $('backupCopyBtn');
         if (bkCopy && bkArea) bkCopy.addEventListener('click', function(){
-          if (!bkArea.value) bkArea.value = makeBackupCode();
-          bkArea.focus(); bkArea.select();
-          var done = function(){ bkShowMsg('コピーしました。', true); };
-          var fallback = function(){
-            var okCopy = false;
-            try { okCopy = document.execCommand('copy'); } catch(e){}
-            if (okCopy) done();
-            else bkShowMsg('コピーできませんでした。コードを長押しで選択してコピーしてください。', false);
+          var doCopy = function(){
+            bkArea.focus(); bkArea.select();
+            var done = function(){ bkShowMsg('コピーしました。', true); };
+            var fallback = function(){
+              var okCopy = false;
+              try { okCopy = document.execCommand('copy'); } catch(e){}
+              if (okCopy) done();
+              else bkShowMsg('コピーできませんでした。コードを長押しで選択してコピーしてください。', false);
+            };
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function'){
+              navigator.clipboard.writeText(bkArea.value).then(done, fallback);
+            } else fallback();
           };
-          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function'){
-            navigator.clipboard.writeText(bkArea.value).then(done, fallback);
-          } else fallback();
+          if (!bkArea.value){
+            makeBackupCode().then(function(code){ bkArea.value = code; doCopy(); });
+          } else doCopy();
         });
         var bkDl = $('backupDlBtn');
         if (bkDl) bkDl.addEventListener('click', function(){
-          var code = (bkArea && bkArea.value) ? bkArea.value : makeBackupCode();
-          if (bkArea) bkArea.value = code;
-          try {
-            var blob = new Blob([code], { type:'text/plain;charset=utf-8' });
-            var dlUrl = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = dlUrl; a.download = 'neko-kakurega-bar-backup.txt';
-            document.body.appendChild(a); a.click();
-            document.body.removeChild(a);
-            setTimeout(function(){ URL.revokeObjectURL(dlUrl); }, 2000);
-            bkShowMsg('バックアップファイルを保存しました。', true);
-          } catch(e){
-            bkShowMsg('ファイル保存ができませんでした。「書き出し」→「コピー」で控えてください。', false);
-          }
+          var saveFile = function(code){
+            if (bkArea) bkArea.value = code;
+            try {
+              var blob = new Blob([code], { type:'text/plain;charset=utf-8' });
+              var dlUrl = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = dlUrl; a.download = 'neko-kakurega-bar-backup.txt';
+              document.body.appendChild(a); a.click();
+              document.body.removeChild(a);
+              setTimeout(function(){ URL.revokeObjectURL(dlUrl); }, 2000);
+              bkShowMsg('バックアップファイルを保存しました。', true);
+            } catch(e){
+              bkShowMsg('ファイル保存ができませんでした。「書き出し」→「コピー」で控えてください。', false);
+            }
+          };
+          if (bkArea && bkArea.value) saveFile(bkArea.value);
+          else makeBackupCode().then(saveFile);
         });
         var bkImport = $('backupImportBtn'), bkArmed = false, bkTimer = null;
         if (bkImport && bkArea) bkImport.addEventListener('click', function(){
           if (!bkArmed){
-            var data = parseBackupCode(bkArea.value);
-            if (!data){
-              bkShowMsg('このコードは読み込めませんでした。正しいバックアップコードか、貼り付けが欠けていないか確認してください（今のセーブは変更されていません）。', false);
-              return;
-            }
-            bkArmed = true;
-            bkImport.textContent = '本当に読み込みますか？ 今のセーブに上書きされます（もう一度タップで実行）';
-            bkImport.classList.add('armed');
-            bkShowMsg('コードを確認しました。第' + data.night + '夜・コイン' + data.coins + '枚のセーブです。よければ、もう一度ボタンを押してください。', true);
-            bkTimer = setTimeout(function(){
-              bkArmed = false;
-              bkImport.textContent = '読み込み（復元）';
-              bkImport.classList.remove('armed');
-            }, 6000);
+            parseBackupCode(bkArea.value).then(function(data){
+              if (!data){
+                bkShowMsg('このコードは読み込めませんでした。正しいバックアップコードか、貼り付けが欠けていないか確認してください（今のセーブは変更されていません）。', false);
+                return;
+              }
+              bkArmed = true;
+              bkImport.textContent = '本当に読み込みますか？ 今のセーブに上書きされます（もう一度タップで実行）';
+              bkImport.classList.add('armed');
+              bkShowMsg('コードを確認しました。第' + data.night + '夜・コイン' + data.coins + '枚のセーブです。よければ、もう一度ボタンを押してください。', true);
+              bkTimer = setTimeout(function(){
+                bkArmed = false;
+                bkImport.textContent = '読み込み（復元）';
+                bkImport.classList.remove('armed');
+              }, 6000);
+            });
             return;
           }
           clearTimeout(bkTimer);
           /* 確認後にコードが書き換えられていたら実行しない */
-          var data2 = parseBackupCode(bkArea.value);
-          if (!data2){
-            bkArmed = false;
-            bkImport.textContent = '読み込み（復元）';
-            bkImport.classList.remove('armed');
-            bkShowMsg('コードが変わっていたため中止しました。今のセーブは変更されていません。', false);
-            return;
-          }
-          try { localStorage.setItem(SAVE_KEY, JSON.stringify(data2)); } catch(e){
-            bkShowMsg('保存に失敗しました。今のセーブは変更されていません。', false);
-            return;
-          }
-          location.reload();
+          parseBackupCode(bkArea.value).then(function(data2){
+            if (!data2){
+              bkArmed = false;
+              bkImport.textContent = '読み込み（復元）';
+              bkImport.classList.remove('armed');
+              bkShowMsg('コードが変わっていたため中止しました。今のセーブは変更されていません。', false);
+              return;
+            }
+            try { localStorage.setItem(SAVE_KEY, JSON.stringify(data2)); } catch(e){
+              bkShowMsg('保存に失敗しました。今のセーブは変更されていません。', false);
+              return;
+            }
+            location.reload();
+          });
         });
       }
     }
