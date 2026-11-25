@@ -2468,27 +2468,27 @@
         text:'お昼寝のしすぎで体がだるいにゃ…。温かい一杯で、ゆっくり目覚めたいにゃ。',
         thanks:'ぽかぽかして目が覚めたにゃ。ありがとうにゃ',
         solve:'ぽかぽかしてきたにゃ…。ゆっくり目が覚めてきたにゃ' },
-      { catId:'shiro_l', taste:'sweet',
+      { catId:'shiro_s', taste:'sweet',
         text:'雪の日に白い毛が景色に溶けて、友達に探されたにゃ。甘い一杯で、雪の日の思い出を味わいたいにゃ。',
         thanks:'雪の日の味がしたにゃ。ありがとうにゃ',
         solve:'甘くて、ふわっとするにゃ。雪の日を思い出すにゃ' },
-      { catId:'kuro_l', taste:'adult',
+      { catId:'kuro_s', taste:'adult',
         text:'夜の街を歩くのが好きにゃ。誰もいない路地の静けさが落ち着くにゃ。マタタビの香りの一杯で、夜の余韻に浸りたいにゃ。',
         thanks:'夜の余韻に浸れたにゃ。ありがとうにゃ',
         solve:'香りが深いにゃ…。静かな夜に溶けていくにゃ' },
-      { catId:'siam_l', taste:'warm',
+      { catId:'siam_s', taste:'warm',
         text:'寒い日は、毛布の山に埋もれるのが一番にゃ。温かい一杯で、毛布の中みたいにほっこりしたいにゃ。',
         thanks:'毛布の中みたいにほっこりしたにゃ。ありがとうにゃ',
         solve:'温かくて、ほっこりするにゃ。毛布の中みたいにゃ' },
-      { catId:'kiji_l', taste:'fresh',
+      { catId:'kiji_s', taste:'fresh',
         text:'朝の畑の空気が好きにゃ。深呼吸すると体が目覚めるにゃ。すっきりした一杯で、朝の気分を思い出したいにゃ。',
         thanks:'朝の畑の気分になれたにゃ。ありがとうにゃ',
         solve:'すっきりしたにゃ！朝の空気みたいにゃ' },
-      { catId:'mike_l', taste:'umami',
+      { catId:'mike_s', taste:'umami',
         text:'今日のお昼のみたらし団子が美味しかったにゃ。うまみのある一杯で、おやつの余韻を楽しみたいにゃ。',
         thanks:'余韻が楽しめたにゃ。ありがとうにゃ',
         solve:'うまみが広がるにゃ…。おやつの余韻が続くにゃ' },
-      { catId:'odd_l', taste:'floral',
+      { catId:'odd_s', taste:'floral',
         text:'朝露に濡れた花畑を見たにゃ。左右の目で花の色が違って見えたにゃ。花の香りの一杯で、あの景色を思い出したいにゃ。',
         thanks:'花畑の景色が浮かんだにゃ。ありがとうにゃ',
         solve:'花の香り…朝の花畑を思い出すにゃ' }
@@ -2751,6 +2751,20 @@
       boardPostNextMemo(b);
       updateBoardBadge();
     }
+    /* メモ表示用の猫名・猫種の解決：通常は登場中の猫マスター（CAT_MASTER）
+       から引くが、万一マスターに無い catId がメモに残っていても
+       「（）のメモ」と空白表示にならないよう、定義表（CAT_DEFS）から
+       名前と猫種だけは引いて表示する（来店・解決判定は従来どおり
+       catById＝CAT_MASTER のみで行うので、登場しない猫のメモが
+       解決扱いになることはない） */
+    function memoCatLabel(catId){
+      var cat = catById(catId);
+      if (cat) return { name: cat.name, breed: cat.breed };
+      for (var i = 0; i < CAT_DEFS.length; i++){
+        if (CAT_DEFS[i].id === catId) return { name: CAT_DEFS[i].name, breed: CAT_DEFS[i].breed };
+      }
+      return { name: '常連さん', breed: '' };
+    }
     /* 貼ってあるメモの表示用データ（猫・タイトル・本文・解決用の味・お礼文） */
     function boardMemoData(m){
       if (!m) return null;
@@ -2759,16 +2773,16 @@
         if (!st) return null;
         var ep = st.eps[m.ep - 1];
         if (!ep) return null;
-        var cat = catById(st.catId);
-        return { catId:st.catId, catName: cat ? cat.name : '', breed: cat ? cat.breed : '',
+        var lab = memoCatLabel(st.catId);
+        return { catId:st.catId, catName: lab.name, breed: lab.breed,
                  seriesTitle: st.title, title:'第' + m.ep + '話「' + ep.title + '」',
                  text:ep.text, taste:ep.taste, thanks:ep.thanks, solve:ep.solve,
                  after:ep.after || null, storyKey:m.key, epNum:m.ep };
       }
       var tw = MEMO_TWEETS[m.idx];
       if (!tw) return null;
-      var c2 = catById(tw.catId);
-      return { catId:tw.catId, catName: c2 ? c2.name : '', breed: c2 ? c2.breed : '',
+      var lab2 = memoCatLabel(tw.catId);
+      return { catId:tw.catId, catName: lab2.name, breed: lab2.breed,
                seriesTitle: null, title:'つぶやきメモ',
                text:tw.text, taste:tw.taste, thanks:tw.thanks, solve:tw.solve,
                after:null, storyKey:null, epNum:0 };
