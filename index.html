@@ -2060,7 +2060,8 @@
         invited: [],              // 特別招待で招待状を送ったネコ科VIPの catId（来店対象になる）
         inviteFirst: [],          // 招待直後の「初回確定来店」の予約（消費されるまで保持される catId）
         pairStories: {},          // VIPペア特別ストーリー { pairId: {owned, read, session} }（購入状態・読書進行）
-        board: null               // お店の掲示板 { requests, memos, storyNext, tweetsUsed, thanks, rot, postCount }（移行処理で初期化）
+        board: null,              // お店の掲示板 { requests, memos, storyNext, tweetsUsed, thanks, rot, postCount }（移行処理で初期化）
+        helpSeen: false           // 遊び方モーダルを見たか（初回起動時の自動表示は1回だけ。閉じたときに true を保存する）
       };
     }
     function loadState(){
@@ -2070,6 +2071,9 @@
           var parsed = JSON.parse(raw);
           var d = defaultState();
           for (var k in d) if (parsed[k] !== undefined) d[k] = parsed[k];
+          /* 既存セーブ（helpSeen を持たないセーブ）は、遊び方をすでに
+             見たものとして扱い、初回自動表示の対象にしない */
+          if (parsed.helpSeen === undefined) d.helpSeen = true;
           return d;
         }
       } catch(e){}
@@ -7759,7 +7763,13 @@
       renderModalBody();
       $('modalOverlay').classList.add('open');
     }
-    function closeModal(){ closeZukanPop(); $('modalOverlay').classList.remove('open'); currentModal = null; inviteConfirm = null; pairConfirm = null; }
+    function closeModal(){
+      /* 遊び方モーダルを閉じたら「見た」を即時保存する。これにより
+         初回起動時の自動表示は1回だけになり、次回以降は開かない。
+         🔔からの手動表示はいつでも可能（この処理は表示自体には影響しない） */
+      if (currentModal === 'help' && state && !state.helpSeen){ state.helpSeen = true; saveNow(); }
+      closeZukanPop(); $('modalOverlay').classList.remove('open'); currentModal = null; inviteConfirm = null; pairConfirm = null;
+    }
     $('modalClose').addEventListener('click', closeModal);
     /* カウンター右端の掲示板小物タップで掲示板モーダルを開く */
     $('boardProp').addEventListener('click', function(){ openModal('board'); });
@@ -8562,6 +8572,13 @@
       updateZukanBadge();
       /* 精算待ちのまま閉じていたら、精算画面から再開する */
       if (state.pendingSettle) setTimeout(showSettlement, 1600);
+      /* 初回プレイの最初の起動時だけ、遊び方モーダルを自動で開く。
+         既存セーブは loadState で helpSeen=true として読み込まれるため、
+         ここで開くのは新規プレイヤーのときだけ。閉じると closeModal が
+         helpSeen を保存するので、次回以降の起動では自動で開かない */
+      if (!state.helpSeen && !state.pendingSettle){
+        setTimeout(function(){ if (!state.helpSeen && !currentModal) openModal('help'); }, 500);
+      }
       /* テーマが新しく決まった夜（初回起動・既存セーブの移行時）は、
          穏やかな案内トーストを出す（精算待ちの再開時は出さない） */
       if (themeFreshDrawn && !state.pendingSettle){
