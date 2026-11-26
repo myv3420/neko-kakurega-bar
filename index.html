@@ -396,6 +396,8 @@
       .note-card.memo{ transform:rotate(.7deg); }
       .note-card.thanks{ transform:rotate(-.4deg); background:#FFFDF4; }
       .note-card.done{ opacity:.82; }
+      /* 大家さんの差し入れ：金色の縁と少し明るい地で、温かい贈り物らしく */
+      .note-card.gift{ background:#FFF6DE; border-color:#D9A44A; transform:rotate(.5deg); }
       .note-from{ font-size:12.5px; font-weight:700; color:#A06428; margin-bottom:3px; }
       .note-new{
         display:inline-block; background:#E4572E; color:#FFF8E7;
@@ -2472,6 +2474,14 @@
           解決するとお礼の張り紙に添えられるほか、ずかんの猫詳細から
           解決済みの話の分をいつでも読み返せる（解決状況は storyNext
           から復元するので、旧セーブの解決済み分も表示される）。
+       ③ 大家さんの差し入れ：作れるドリンクが1つも無く、所持コインが
+          一番安い「+5補充」の価格より少ない「本当に詰んだとき」だけ、
+          掲示板（おすそわけタブの先頭）に大家猫からの差し入れカードが
+          届く。基本素材3種（ミルク／はちみつ／お魚チップス）各3個を
+          無料で受け取れ、1夜に1回まで（giftNight で管理）。受け取ると
+          作れるドリンクが復活して条件が外れるため連発はできない。
+          ペナルティ・返済は無し。条件を満たす間は掲示板バッジと
+          おすそわけタブの印で気づける。
        状態はすべて state.board に保存する（既存セーブには移行処理で
        初期状態を追加する）。
        ========================================================= */
@@ -2736,7 +2746,7 @@
        unreadThanks＝お礼タブの未読件数。旧セーブには移行で補う */
     function boardState(){
       if (!state.board || typeof state.board !== 'object'){
-        state.board = { requests:[], memos:[], storyNext:{}, storyDone:{}, tweetsUsed:[], thanks:[], rot:0, postCount:0, offers:[], unreadThanks:0 };
+        state.board = { requests:[], memos:[], storyNext:{}, storyDone:{}, tweetsUsed:[], thanks:[], rot:0, postCount:0, offers:[], unreadThanks:0, giftNight:0 };
       }
       var b = state.board;
       if (!Array.isArray(b.requests)) b.requests = [];
@@ -2761,6 +2771,9 @@
       if (typeof b.setGap !== 'number') b.setGap = 0;
       if (typeof b.postCount !== 'number') b.postCount = 0;
       if (typeof b.unreadThanks !== 'number') b.unreadThanks = 0;
+      /* giftNight＝大家さんの差し入れを最後に受け取った夜の番号
+         （1夜に1回までの制限用。旧セーブには移行で 0 を補う） */
+      if (typeof b.giftNight !== 'number') b.giftNight = 0;
       b.requests.forEach(function(r){ if (r && !r.type) r.type = 'normal'; });
       return b;
     }
@@ -3108,14 +3121,63 @@
       var cat = catById(catId);
       return !!cat && cat.breed === t.breed;
     }
+    /* ---------- 大家さんの差し入れ（本当に詰んだときのお助け） ----------
+       出現条件は「本当に詰んだとき」だけに絞る：
+       ① 今の在庫では作れるドリンク（解放済みレシピ）が1つも無い
+       ② 所持コインが一番安い「+5補充」の価格より少ない（補充も買えない）
+       ③ 今夜まだ受け取っていない（1夜に1回まで）
+       中身は序盤の基本素材3種（ベース＝ミルク／割材＝はちみつ／
+       おつまみ＝お魚チップス）各3個で、レシピ「はちみつミルク」が
+       3杯作れる量。受け取ると ① が解けるので条件は自然に外れ、
+       ③ の夜制限と合わせて連発できない。ペナルティ・返済は無し */
+    var LANDLORD_GIFT = [
+      { kind:'base',  id:'milk',  qty:3 },
+      { kind:'mixer', id:'honey', qty:3 },
+      { kind:'snack', id:'fish',  qty:3 }
+    ];
+    /* 今の在庫で作れるドリンク（解放済みレシピ）が1つでもあるか */
+    function anyRecipeMakeable(){
+      return listableRecipes().some(function(r){ return comboInStock(r); });
+    }
+    /* 一番安い「+5補充」の価格（解放済み素材の中で最小の restock） */
+    function cheapestRestockPrice(){
+      var min = Infinity;
+      ['base','mixer','snack'].forEach(function(kind){
+        availableIng(kind).forEach(function(it){ if (it.restock < min) min = it.restock; });
+      });
+      return min;
+    }
+    /* 差し入れが掲示板に届いているか（上の出現条件をすべて満たすか） */
+    function landlordGiftAvailable(){
+      if (!state) return false;
+      var b = boardState();
+      if (b.giftNight === state.night) return false;
+      if (anyRecipeMakeable()) return false;
+      return state.coins < cheapestRestockPrice();
+    }
+    /* 差し入れの受け取り：基本素材3種を各3個、在庫に無料で加える */
+    function claimLandlordGift(){
+      var b = boardState();
+      if (!landlordGiftAvailable()) return;
+      LANDLORD_GIFT.forEach(function(g){
+        state.stock[stockKey(g.kind, g.id)] = stockOf(g.kind, g.id) + g.qty;
+      });
+      b.giftNight = state.night;
+      save();
+      renderModalBody();
+      updateBoardBadge();
+      toast('🎁 差し入れを受け取りました！',
+        LANDLORD_GIFT.map(function(g){ return ingName(g.kind, g.id); }).join('・') + ' が各 +3 されました');
+    }
     /* 通知バッジ：未読のメモ・未読のお礼があるか、在庫が足りて今すぐ
-       納品できる依頼（単品・急ぎ・セット）があるときに掲示板小物へ
-       「！」を出す */
+       納品できる依頼（単品・急ぎ・セット）があるか、大家さんの
+       差し入れが届いているときに掲示板小物へ「！」を出す */
     function boardNeedsAttention(){
       var b = boardState();
       var unread = b.memos.some(function(m){ return !m.read && !m.solved; });
       if (unread) return true;
       if ((b.unreadThanks || 0) > 0) return true;
+      if (landlordGiftAvailable()) return true;
       return b.requests.some(function(r){ return !r.done && boardReqEnough(r); });
     }
     function updateBoardBadge(){
@@ -9968,7 +10030,7 @@
            新しいものが上で、保持は最新10件まで）。
            納品可能な依頼・未読メモ・未読のお礼があるタブには印を出す */
         var bb = boardState();
-        var shareDot = bb.requests.some(function(r){ return !r.done && boardReqEnough(r); });
+        var shareDot = bb.requests.some(function(r){ return !r.done && boardReqEnough(r); }) || landlordGiftAvailable();
         var memoDot = bb.memos.some(function(m){ return !m.read && !m.solved; });
         var thanksDot = (bb.unreadThanks || 0) > 0;
         var htmlB = '<p class="modal-note">ご近所のお店との「素材おすそわけ」と、常連さんたちの小さなメモが貼ってあります。</p>';
@@ -9979,6 +10041,18 @@
           '</div>';
         htmlB += '<div class="board-wrap">';
         if (boardTab === 'share'){
+          /* 大家さんの差し入れ：本当に詰んだときだけ届くお助けカード。
+             条件を満たしている間だけ、おすそわけ依頼より上に貼られる */
+          if (landlordGiftAvailable()){
+            htmlB += '<div class="board-sec-title">🎁 大家さんからの差し入れ</div>';
+            htmlB += '<div class="note-card gift">' +
+              '<div class="note-from">大家さん（大家猫）より<span class="note-new">NEW</span></div>' +
+              '<p class="note-text">「棚もお財布も空っぽみたいだにゃ。ほんの少しだけど、置いていくにゃ。困ったときはお互いさまにゃ、返さなくていいにゃ。元気が出たら、また美味しい一杯を作っておくれにゃ」</p>' +
+              '<p class="note-set-items">' + LANDLORD_GIFT.map(function(g){ return '・' + ingName(g.kind, g.id) + ' ×' + g.qty; }).join('<br>') + '</p>' +
+              '<div class="note-meta">レシピ「はちみつミルク」が3杯作れる詰め合わせです。お代はいりません</div>' +
+              '<button class="board-deliver" id="giftClaimBtn" type="button">ありがたく受け取る</button>' +
+              '</div>';
+          }
           htmlB += '<div class="board-sec-title">📦 素材おすそわけ依頼</div>';
           if (!bb.requests.length){
             htmlB += '<div class="note-card"><p class="note-text">今は依頼がありません。営業を続けると、ご近所から届きます。</p></div>';
@@ -10096,6 +10170,8 @@
         body.querySelectorAll('[data-deliver]').forEach(function(btn){
           btn.addEventListener('click', function(){ deliverBoardRequest(parseInt(btn.getAttribute('data-deliver'), 10)); });
         });
+        var giftBtn = $('giftClaimBtn');
+        if (giftBtn) giftBtn.addEventListener('click', claimLandlordGift);
         body.querySelectorAll('[data-offer-cancel]').forEach(function(btn){
           btn.addEventListener('click', function(){ boardCancelOffer(parseInt(btn.getAttribute('data-offer-cancel'), 10)); });
         });
