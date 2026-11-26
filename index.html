@@ -1133,6 +1133,10 @@
         object-fit:contain; object-position:50% 100%;
       }
       .pair-ava-b{ margin-left:-12px; }
+      /* ペアカード：まだ解放されていない猫はシルエット（黒い影絵）にする。
+         招待欄の .invite-img.locked と同じフィルタで、片方だけ未解放なら
+         その子だけ影絵になる */
+      .pair-ava.locked{ filter:brightness(0) opacity(.32); }
       .pair-titles{ margin-left:8px; min-width:0; }
       .pair-names{ font-size:14px; font-weight:800; line-height:1.35; }
       .pair-story-title{ font-size:12px; font-weight:800; color:#8A6D1F; line-height:1.4; }
@@ -1235,6 +1239,26 @@
         margin:0; font-size:11.5px; font-weight:800; color:var(--wood-dark);
       }
       .settings-danger .vol-desc{ margin-top:6px; }
+      /* 設定モーダル内の2タブ（サウンド／セーブ）：ずかん・ショップの
+         タブと同じ見た目にそろえ、内容が長くなっても切り替えて見せる */
+      .settings-tabs{ display:flex; gap:8px; margin-bottom:12px; }
+      .settings-tab{
+        flex:1; cursor:pointer; font-family:inherit; font-weight:800; font-size:12.5px;
+        min-height:40px; border-radius:12px; padding:7px 4px; white-space:nowrap;
+        background:#fff; color:var(--wood-dark); border:2.5px solid #E4D2AC;
+      }
+      .settings-tab.on{
+        background:linear-gradient(180deg,#F2B26B,var(--accent-deep)); color:#fff;
+        border-color:var(--ink); text-shadow:0 1px 0 rgba(74,53,37,.4); box-shadow:0 3px 0 var(--ink);
+      }
+      .settings-tab:focus-visible{ outline:3px solid var(--accent); outline-offset:2px; }
+      /* クラウドセーブ欄の注意事項リスト */
+      .cloud-notes{ margin:8px 0 2px; padding:0; list-style:none; }
+      .cloud-notes li{
+        font-size:11px; font-weight:700; color:var(--wood-dark); line-height:1.55;
+        margin-top:3px; padding-left:13px; position:relative;
+      }
+      .cloud-notes li::before{ content:'・'; position:absolute; left:0; }
       /* バックアップ欄：リセット（破線・地味な小ボタン）と間違えて
          押さないよう、白いカード＋実線の大きめボタンで見た目と
          配置をはっきり分ける（バックアップはカード内、リセットは
@@ -8659,6 +8683,14 @@
       save(); renderStatus(); renderModalBody();
       toast('📚 特別ストーリーを解放しました！', '『' + def.title + '』（全7話）が読めるようになりました');
     }
+    /* ペアカードの猫が「まだ解放されていない」かどうか：特別招待VIPは
+       未招待の間、家猫VIPは段階解放の夜数に届いていない間が未解放
+       （出会ったことのあるVIPは isVipNightUnlocked の保護で常に解放済み）。
+       未解放の子は、カードの画像だけをシルエット（影絵）表示にする */
+    function pairCatLocked(c){
+      if (c.inviteOnly) return state.invited.indexOf(c.id) === -1;
+      return !isVipNightUnlocked(c);
+    }
     /* ペアストーリーのカードHTML（思い出の本棚モーダルとショップの
        「ストーリー」タブで共通。購入・閲覧のデータも共通） */
     function pairCardHtml(def){
@@ -8666,7 +8698,7 @@
       if (!ca || !cb) return '';
       var pst = pairState(def.id);
       var html = '<div class="pair-card">' +
-        '<div class="pair-head"><img class="pair-ava" src="' + ca.frame1 + '" alt=""><img class="pair-ava pair-ava-b" src="' + cb.frame1 + '" alt="">' +
+        '<div class="pair-head"><img class="pair-ava' + (pairCatLocked(ca) ? ' locked' : '') + '" src="' + ca.frame1 + '" alt=""><img class="pair-ava pair-ava-b' + (pairCatLocked(cb) ? ' locked' : '') + '" src="' + cb.frame1 + '" alt="">' +
         '<div class="pair-titles"><div class="pair-names">👑 ' + ca.fixedName + ' × ' + cb.fixedName + '</div>' +
         '<div class="pair-story-title">『' + def.title + '』（全7話）</div></div></div>' +
         '<p class="pair-blurb">' + def.blurb + '</p>';
@@ -8963,6 +8995,8 @@
     var inviteConfirm = null;
     /* ショップモーダル内のタブ：'invite'＝特別招待／'recipe'＝特別レシピ／'story'＝ペア特別ストーリー */
     var shopTab = 'invite';
+    /* 設定モーダル内のタブ：'sound'＝サウンド（BGMのON／OFF・音量）／'save'＝セーブ（クラウドセーブ・バックアップ・リセット） */
+    var settingsTab = 'sound';
     function inviteDef(catId){
       for (var i = 0; i < INVITE_DEFS.length; i++) if (INVITE_DEFS[i].id === catId) return INVITE_DEFS[i];
       return null;
@@ -9675,7 +9709,12 @@
       }
       if (currentModal === 'settings'){
         var bgmIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="#4A3525" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v11.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/></svg>';
-        var html5 = '<p class="modal-note">お店の音量を調整できます。スライダーを動かすと、再生中の音にすぐ反映されます。設定は自動で保存され、次に開いたときもそのままです。</p>';
+        var html5 = '<div class="settings-tabs" role="tablist">' +
+          '<button class="settings-tab' + (settingsTab === 'sound' ? ' on' : '') + '" data-stab="sound" type="button">🔊 サウンド</button>' +
+          '<button class="settings-tab' + (settingsTab === 'save' ? ' on' : '') + '" data-stab="save" type="button">💾 セーブ</button>' +
+          '</div>';
+        if (settingsTab === 'sound'){
+        html5 += '<p class="modal-note">お店の音量を調整できます。スライダーを動かすと、再生中の音にすぐ反映されます。設定は自動で保存され、次に開いたときもそのままです。</p>';
         html5 += '<div class="vol-group">' +
           '<div class="vol-head">' + bgmIcon + '<span class="vol-title">BGM（ジャズ）</span>' +
           '<button class="vol-toggle' + (state.sndBgm ? ' on' : '') + '" id="volBgmToggle" type="button">' + (state.sndBgm ? 'ON' : 'OFF') + '</button></div>' +
@@ -9684,26 +9723,21 @@
           '<span class="vol-max">大</span><span class="vol-value" id="volBgmValue">' + state.volBgm + '%</span></div>' +
           '<p class="vol-desc">ゆったりしたジャズの音量です。60%が今までの聞こえ方と同じくらいです。</p></div>';
         html5 += '<p class="modal-note">BGMのON／OFFは上のボタンで切り替えられます。</p>';
-        html5 += '<div class="settings-danger">' +
-          '<p class="settings-danger-title">データの管理</p>' +
-          '<div class="backup-box">' +
-            '<p class="backup-title">💾 バックアップ</p>' +
-            '<p class="vol-desc">今のセーブを1つの「バックアップコード」に書き出せます。コードを控えておけば、端末やブラウザを変えたときや、万が一セーブが消えたときに復元できます。</p>' +
-            '<textarea id="backupCode" class="backup-code" placeholder="「書き出し」を押すと、ここにコードが表示されます。復元するときは、控えたコードをここに貼り付けてください。" aria-label="バックアップコード"></textarea>' +
-            '<div class="backup-btns">' +
-              '<button class="backup-btn" id="backupExportBtn" type="button">書き出し</button>' +
-              '<button class="backup-btn sub" id="backupCopyBtn" type="button">コピー</button>' +
-              '<button class="backup-btn sub" id="backupDlBtn" type="button">ファイルで保存</button>' +
-              '<button class="backup-btn" id="backupImportBtn" type="button">読み込み（復元）</button>' +
-            '</div>' +
-            '<p class="backup-msg" id="backupMsg" role="status"></p>' +
-          '</div>' +
-          '<div class="backup-box">' +
+        } else {
+        /* セーブタブ：上から「☁️ クラウドセーブ」→「💾 バックアップ（コード）」
+           →「セーブデータをリセット」の順に並べる */
+        html5 += '<div class="backup-box">' +
             '<p class="backup-title">☁️ クラウドセーブ</p>' +
-            '<p class="vol-desc">合言葉を決めておくと、セーブをクラウドにも預けられます。別の端末で同じ合言葉を入れれば、続きから遊べます。端末への自動保存と上のバックアップコードは、今まで通りそのまま使えます。</p>' +
+            '<p class="vol-desc">合言葉を決めておくと、セーブをクラウドにも預けられます。別の端末で同じ合言葉を入れれば、続きから遊べます。端末への自動保存とバックアップコードも、今まで通りそのまま使えます。</p>' +
+            '<ul class="cloud-notes">' +
+              '<li>合言葉は日本語でも使えます（ひらがな・カタカナ・漢字OK）。</li>' +
+              '<li>別の端末で入力するときは、まったく同じ文字で入力してください。「が」などの濁点の文字は、端末やキーボードによって、見た目は同じでも別の文字として扱われることがあります。</li>' +
+              '<li>合言葉は8文字以上を推奨します。</li>' +
+              '<li>合言葉を忘れると、クラウドのセーブは復元できません。</li>' +
+            '</ul>' +
             '<div id="cloudNoKey">' +
               '<input type="password" id="cloudPass" class="cloud-pass" placeholder="合言葉を入力" autocomplete="new-password" aria-label="クラウドセーブの合言葉">' +
-              '<p class="vol-desc">合言葉は8文字以上を推奨します。合言葉そのものは保存されず、暗号化した鍵だけがこの端末に残ります。合言葉を忘れると、クラウドのセーブは取り出せなくなります。</p>' +
+              '<p class="vol-desc">合言葉そのものは保存されず、暗号化した鍵だけがこの端末に残ります。</p>' +
               '<div class="backup-btns"><button class="backup-btn" id="cloudSetBtn" type="button">合言葉を設定する</button></div>' +
             '</div>' +
             '<div id="cloudHasKey" style="display:none">' +
@@ -9721,9 +9755,30 @@
             '</div>' +
             '<p class="backup-msg" id="cloudMsg" role="status"></p>' +
           '</div>' +
+          '<div class="backup-box">' +
+            '<p class="backup-title">💾 バックアップ</p>' +
+            '<p class="vol-desc">今のセーブを1つの「バックアップコード」に書き出せます。コードを控えておけば、端末やブラウザを変えたときや、万が一セーブが消えたときに復元できます。</p>' +
+            '<textarea id="backupCode" class="backup-code" placeholder="「書き出し」を押すと、ここにコードが表示されます。復元するときは、控えたコードをここに貼り付けてください。" aria-label="バックアップコード"></textarea>' +
+            '<div class="backup-btns">' +
+              '<button class="backup-btn" id="backupExportBtn" type="button">書き出し</button>' +
+              '<button class="backup-btn sub" id="backupCopyBtn" type="button">コピー</button>' +
+              '<button class="backup-btn sub" id="backupDlBtn" type="button">ファイルで保存</button>' +
+              '<button class="backup-btn" id="backupImportBtn" type="button">読み込み（復元）</button>' +
+            '</div>' +
+            '<p class="backup-msg" id="backupMsg" role="status"></p>' +
+          '</div>' +
           '<button id="resetBtn" type="button">セーブデータをリセット</button>' +
-          '<p class="vol-desc">コイン・星・ずかん・ストーリーなどの記録をすべて消して、最初から始めます。</p></div>';
+          '<p class="vol-desc">コイン・星・ずかん・ストーリーなどの記録をすべて消して、最初から始めます。</p>';
+        }
         body.innerHTML = html5;
+        /* 設定内タブ（サウンド／セーブ）の切り替え：タブ状態は
+           settingsTab に持ち、再描画で内容を差し替える */
+        body.querySelectorAll('[data-stab]').forEach(function(b){
+          b.addEventListener('click', function(){
+            settingsTab = b.getAttribute('data-stab');
+            renderModalBody();
+          });
+        });
         var bgmRange = $('volBgmRange');
         if (bgmRange){
           bgmRange.addEventListener('input', function(){
