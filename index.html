@@ -300,6 +300,22 @@
       }
       @keyframes shelfGlow{ 0%,100%{ opacity:.18; } 50%{ opacity:.95; } }
       @media (prefers-reduced-motion: reduce){ #shelfGlow{ animation:none; opacity:.55; } }
+      /* 本棚の📖バッジ：購入できるペアストーリーがあるときだけ、棚の
+         タップエリア（#shelfProp）の右上に控えめに表示する小さな丸
+         バッジ。棚のシルエットグローだけでは「新しい物語が買える」
+         ことまでは伝わらないための補助。タップ判定は親のボタンが
+         持つので、こちらは pointer-events:none で邪魔しない。
+         表示の更新は updateShelfBadge()（renderStatus から呼ばれる） */
+      .shelf-badge{
+        position:absolute; right:1%; top:-9px; z-index:2;
+        min-width:22px; height:22px; padding:0 3px; box-sizing:border-box;
+        border-radius:50%; background:#8A6D1F; color:#FFF8E7;
+        font-size:12px; line-height:20px; text-align:center;
+        border:2px solid #FFF3DC; box-shadow:0 2px 5px rgba(0,0,0,.35);
+        pointer-events:none;
+        animation:boardBadgePulse 1.6s ease-in-out infinite;
+      }
+      @media (prefers-reduced-motion: reduce){ .shelf-badge{ animation:none; } }
       /* ---------- 掲示板モーダル（コルクボード風） ---------- */
       .board-wrap{
         background:
@@ -1376,7 +1392,7 @@
                開く。棚の形に切り抜いた光のレイヤー（#shelfGlow）の明滅で、
                タップできる場所だと分かるようにする。文字ラベルは置かない -->
           <div id="shelfGlow" aria-hidden="true"><img src="data:image/webp;base64,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" alt="" /></div>
-          <button id="shelfProp" type="button" aria-label="思い出の本棚を開く" title="思い出の本棚（VIPペア特別ストーリー）"></button>
+          <button id="shelfProp" type="button" aria-label="思い出の本棚を開く" title="思い出の本棚（VIPペア特別ストーリー）"><span class="shelf-badge" id="shelfBadge" style="display:none">📖</span></button>
         </div>
         <div id="toast" role="status"></div>
         <div id="bigBanner" aria-hidden="true">大成功！</div>
@@ -5442,6 +5458,7 @@
       }
       $('gaugeFill').style.width = Math.min(100, state.mood / MOOD_GOAL * 100) + '%';
       updateBoardBadge(); /* 在庫・メモの変化に合わせて掲示板の通知バッジも更新 */
+      updateShelfBadge(); /* 購入できるペアストーリーがあれば本棚の📖バッジも更新 */
       /* 今夜のノルマ（ゲージ直下）：夜の番号と、ノルマまでの残りを表示 */
       var ql = $('quotaLine');
       if (ql && state.nightStats){
@@ -7831,6 +7848,344 @@
             ['m','お2人の夜が、これからも穏やかで甘いものでありますように'],
             ['n','― 百獣の王と、孤高の虎　おわり ―']
           ]
+        ] },
+      { id:'silver_mone', a:'snow_s', b:'sabi_s', title:'言葉と色のスケッチ', coins:5000, stars:80,
+        blurb:'言葉にするのが不器用な雪山の詩人シルバと、絵で感情を描く芸術家モネ。モネの描いた「雪の夜の風景画」にシルバが詩を添え、2人でひとつの絵本のような作品を作る、静かで美しい物語。',
+        eps:[
+          [ /* 第1話 */
+            ['n','雪の夜の絵を抱えた芸術家が、詩人の隣に座った'],
+            ['b','ねえシルバ、見て。ぼくの新作、「雪の夜」だよ'],
+            ['a','……雪の、夜'],
+            ['b','雪山出身の君に、最初に見せたかったんだ。どう…かな'],
+            ['a','……言葉が、すぐには出てこない。でも、それが答えかもしれない'],
+            ['b','え…？'],
+            ['m','モネさんの絵、静かで綺麗ですね']
+          ],
+          [ /* 第2話 */
+            ['b','この絵はね、音のない世界を描きたかったんだ'],
+            ['a','音のない世界…。雪は、音を吸い込むから'],
+            ['d','sparkle',
+              [['a','……キラキラと、雪に反射する月明かりのようだ'],['b','わあ…この一杯、絵の中の雪みたいに光ってる']],
+              [['a','ありがとう。…今夜は、雪明かりのようにキラキラした一杯が、この絵には合う気がして'],['b','うん、でも美味しいよ。ありがとう、マスター']]],
+            ['b','シルバは雪山で、こんな景色を見てきたんだね'],
+            ['a','ああ。…懐かしい、景色だ']
+          ],
+          [ /* 第3話（2択） */
+            ['a','モネ。…この絵に、言葉を添えても、いいだろうか'],
+            ['b','言葉…？　シルバの詩を？'],
+            ['a','うまく言えないけれど。この絵を見ていたら、胸の中で、言葉が降り積もったんだ'],
+            ['q','a','マスターは、どう思う？　絵に詩を添えるのは、絵の邪魔になるだろうか',
+              'なりません。絵がもっと深く見えます',
+              [['a','…そうか。ありがとう'],['b','ぼくも聞きたい。シルバの言葉で、この絵がどう変わるのか']],
+              '絵は絵だけで完成しています',
+              [['a','…そうだな。絵は、絵だけで、完成している'],['b','ううん、シルバ。ぼくは聞きたいよ。完成の先を、一緒に見たいんだ']]]
+          ],
+          [ /* 第4話 */
+            ['n','シルバは静かに目を閉じ、小さな声で詩を口ずさんだ'],
+            ['a','「雪は音をしまい、月は影をほどく。白い静けさの中で、迷子の心だけが、道を見つける」'],
+            ['b','……！　シルバ、それ…ぼくの絵、そのものだ…'],
+            ['a','絵が、先にそこにあった。僕の言葉は、後からついていっただけだ'],
+            ['b','違うよ。言葉をもらって、絵が息をし始めたんだ'],
+            ['m','（絵と言葉が、手を取り合ったみたいだ…）']
+          ],
+          [ /* 第5話（ドリンク） */
+            ['n','マスターが、温かい一杯を2人の前にそっと置いた'],
+            ['b','ねえシルバ、この絵と詩で、ひとつの作品にしない？'],
+            ['a','ひとつの…作品'],
+            ['d','warm',
+              [['b','温かい…。雪の絵なのに、心はぽかぽかだ'],['a','……温かいものは、静けさと喧嘩しないんだな']],
+              [['b','ありがとう。…雪の夜の話には、温かくまろやかな一杯が寄り添ってくれると嬉しいな'],['a','すまん、マスター。気持ちは、受け取った']]],
+            ['b','絵本みたいな作品。絵があって、隣に詩があるの'],
+            ['a','……悪くない、響きだ']
+          ],
+          [ /* 第6話（2択） */
+            ['b','タイトルは、2人で決めたいな'],
+            ['q','b','マスター、どっちのタイトルがいいと思う？',
+              '「雪の夜のスケッチ」',
+              [['b','スケッチ…うん、素朴でいいね'],['a','言葉と色の、スケッチ。…気に入った']],
+              '「白い静けさの絵本」',
+              [['b','絵本、かあ。子どもみたいにワクワクするね'],['a','白い静けさ…。僕たちの景色、そのものだ']]],
+            ['a','決まりだな。…制作は、明日から'],
+            ['b','うん！　ぼく、徹夜しちゃいそう']
+          ],
+          [ /* 第7話 */
+            ['n','夜の終わり、2人は並んで絵を眺めていた'],
+            ['b','シルバ、今日はありがとう。言葉って、色なんだね'],
+            ['a','……色も、言葉だ。モネに教わった'],
+            ['m','お2人の絵本、完成したら最初に見せてくださいね'],
+            ['b','もちろん！　マスターには、特製のサイン入りで'],
+            ['a','（小さく微笑んで）…楽しみに、していてくれ'],
+            ['n','― 言葉と色のスケッチ　おわり ―']
+          ]
+        ] },
+      { id:'rapid_kai', a:'chee_s', b:'main_l', title:'海の便りと、陸の風', coins:5000, stars:80,
+        blurb:'カイが遠い港町から持ち帰った「宛先の消えかけた古い手紙」を、街中の道を知り尽くした俊足の配達員ラピッドが一緒に届けることに。海と陸、それぞれの「運ぶプロ」がバディを組む、爽やかな物語。',
+        eps:[
+          [ /* 第1話 */
+            ['n','船長が持ち帰った古い手紙が、カウンターに置かれた'],
+            ['b','ラピッドさん、見てください。この手紙、港町で預かったんです'],
+            ['a','手紙？　ぼくに？　…って、宛名が消えかけてるじゃないか！'],
+            ['b','住所も半分だけ。でも、捨てるわけにはいかなくて'],
+            ['a','ふーん…「港の見える丘の、赤い屋根の家」…これだけ？'],
+            ['b','手がかりは、それだけです'],
+            ['m','お2人とも、なんだか探偵みたいですね']
+          ],
+          [ /* 第2話 */
+            ['a','でも任せて！　この街の道は、全部ぼくの頭に入ってるから！'],
+            ['b','さすが、街の配達員さんですね'],
+            ['d','fresh',
+              [['a','すっきりー！　よし、頭が冴えてきた！'],['b','爽やかな味ですね。船の上の風を思い出します']],
+              [['a','ありがとう！　…調査の前には、すっきり爽やかな一杯で気合を入れたかったな'],['b','すみません、次は爽やかな一杯をお願いします']]],
+            ['a','「赤い屋根の家」…丘の上なら、候補は3軒まで絞れるはず'],
+            ['b','もう絞れたんですか…！？']
+          ],
+          [ /* 第3話（2択） */
+            ['b','ラピッドさん、どうしてそこまで道に詳しいんですか'],
+            ['a','配達はね、届けるだけじゃないんだ。街の「今」を運んでるの'],
+            ['q','b','マスターはどう思います？　手紙を届ける仕事で、一番大事なことは何でしょう',
+              '速さです。待っている人がいますから',
+              [['b','その通りですね'],['a','もちろん速さも大事。でもね、それだけじゃないんだ']],
+              '気持ちです。届けたいという心です',
+              [['a','…そう、それ！　気持ちがなきゃ、ただの荷物だよ'],['b','気持ち…。この手紙にも、きっと強い気持ちが込められています']]]
+          ],
+          [ /* 第4話 */
+            ['n','2人は手紙の差出人の印を、灯りの下でじっくり眺めた'],
+            ['a','見て、この消印！　10年前の港町の消印だ'],
+            ['b','10年前…。僕が若い頃、よく寄った港です'],
+            ['a','宛先の丘の家、今は誰が住んでるかも調べがついたよ'],
+            ['b','差出人の家族が、今も待っているかもしれませんね'],
+            ['m','10年越しの手紙…届くといいですね']
+          ],
+          [ /* 第5話（ドリンク） */
+            ['n','出発前の作戦会議に、マスターが温かい一杯を届けた'],
+            ['b','海の便りは、嵐で遅れることもあります。でも、必ず届けます'],
+            ['a','陸の便りも同じだよ。ぼくが、必ず届ける'],
+            ['d','warm',
+              [['a','温かい…！　よし、明日の朝イチで出発だ！'],['b','ほっとする味ですね。長い旅の前に、ぴったりです']],
+              [['a','ありがとう。…明日の長距離の前に、温かくまろやかな一杯で温まっておきたかったな'],['b','次は温かい一杯で、出発を祝いましょう']]],
+            ['a','明日はぼくの脚と、船長さんの勘で、絶対に届けよう'],
+            ['b','はい。心強い相棒です']
+          ],
+          [ /* 第6話（2択） */
+            ['a','ねえ船長さん、海の上では迷わないの？'],
+            ['b','迷いますよ。でも、星と羅針盤が道を示してくれます'],
+            ['q','a','マスターは、陸の道案内と海の道案内、どっちが頼もしいと思う？',
+              'どちらも、その道のプロです',
+              [['a','はは、その通り！　プロ同士、認め合うのが一番だよね'],['b','ええ。陸はラピッドさんに、海は僕にお任せを']],
+              '迷ったときは、相棒が一番です',
+              [['b','相棒…いい言葉ですね'],['a','だね！　明日の配達、2人なら絶対に迷わないよ']]],
+            ['a','よーし、明日が楽しみになってきた！']
+          ],
+          [ /* 第7話 */
+            ['n','夜明け前、2人は手紙を大事に抱えて、店を出ていった'],
+            ['a','行ってきます！　丘の家まで、風みたいに届けてくるから！'],
+            ['b','マスター、報告は帰港のときに。きっと、いい知らせを持ち帰ります'],
+            ['m','お2人とも、気をつけて。いい旅を'],
+            ['a','海の便りと、陸の風。最強のバディだね、船長さん！'],
+            ['b','ええ。…この手紙が、10年分の笑顔に変わりますように'],
+            ['n','― 海の便りと、陸の風　おわり ―']
+          ]
+        ] },
+      { id:'tora_cecil', a:'tora_s', b:'pers_l', title:'秘密の甘味品評会', coins:6000, stars:90,
+        blurb:'実は超甘党のコテツと、美味しいものに目がないお嬢様セシル。見た目は強面なコテツに最初はドキドキしていたセシルが、コテツ特製の一口和菓子と甘いミルクカクテルをきっかけに「師匠！」と呼ぶほど意気投合する、ほのぼの物語。',
+        eps:[
+          [ /* 第1話 */
+            ['n','お嬢様が、強面の職人の隣で少し緊張していた'],
+            ['b','あの…コテツさん、ですわよね。は、はじめまして…'],
+            ['a','……ああ。コテツだ。怖がらせるつもりは、ないんだがな'],
+            ['b','（大、大きい…でも、目元は優しいかも…）'],
+            ['a','……すまん、無愛想で。昔から、こんな顔でな'],
+            ['m','お2人とも、今夜はゆっくりしていってください']
+          ],
+          [ /* 第2話 */
+            ['b','コテツさんは、和菓子の職人さんなんですの？'],
+            ['a','……ああ。餡を練るのが、仕事だ'],
+            ['d','warm',
+              [['a','……温かい。緊張が、ほどける味だ'],['b','まろやかで、ほっとしますわ。私の緊張までほどけますわ']],
+              [['a','悪くない。だが、固くなった空気には、温かくまろやかな一杯が合う'],['b','そうですわね…まず、温かい一杯で落ち着きたかったですわ']]],
+            ['b','和菓子…私、大好きですの。お屋敷のお茶会でも、いつも楽しみで'],
+            ['a','……そうか。甘いものが、好きなのか']
+          ],
+          [ /* 第3話（2択） */
+            ['b','実は私、甘いものには目がなくて。お屋敷では内緒にしていますの'],
+            ['a','……ふ。奇遇だな。俺もだ'],
+            ['b','えっ…コテツさんも、甘いものが…？'],
+            ['q','b','マスター、聞いてちょうだい。甘いもの好き同士、最初の一品は何がいいかしら',
+              'コテツさん特製の一口和菓子です',
+              [['b','まあ…！　職人さんの和菓子、ぜひいただきたいですわ'],['a','……分かった。一口サイズの、とっておきを作ろう']],
+              '甘いミルクカクテルで乾杯です',
+              [['a','ミルクカクテルか。……悪くない。甘党の乾杯だな'],['b','ふふ、甘い乾杯。素敵ですわ']]]
+          ],
+          [ /* 第4話 */
+            ['n','コテツが懐から、小さな包みを取り出した'],
+            ['a','……試作品だがな。一口サイズの、栗の和菓子だ'],
+            ['b','まあ…！　（ひと口）…ん…！　お、美味しいですわ…！！'],
+            ['a','……そうか。そいつは、よかった'],
+            ['b','上品な甘さで、後味がすっと消えて…。お屋敷のお茶会でも出したいくらいですわ'],
+            ['m','セシルさん、目が輝いてますよ']
+          ],
+          [ /* 第5話（ドリンク） */
+            ['n','品評会の本番に、マスターが甘いミルクカクテルを2人に運んだ'],
+            ['b','では、秘密の甘味品評会、開会ですわ！'],
+            ['a','……品評会とは、大げさな。だが、付き合おう'],
+            ['d','sweet',
+              [['b','甘くて、とろける…！　これは満点ですわ'],['a','……うまい。甘さの加減が、職人泣かせだ']],
+              [['b','ありがとう。…品評会には、とびきり甘い一杯で臨みたかったのですわ'],['a','すまん、マスター。俺の舌は、甘い一杯を待っていたんだ']]],
+            ['b','コテツさんの和菓子と、このカクテル…最高の組み合わせですわ'],
+            ['a','……ふ。光栄だ']
+          ],
+          [ /* 第6話（2択） */
+            ['a','セシル。甘いものは、なぜ人を笑顔にすると思う'],
+            ['b','まあ、職人さんらしい質問ですわね'],
+            ['q','a','マスター、聞いてくれ。甘いものの一番の仕事は、何だと思う？',
+              '疲れた心を、ほどくことです',
+              [['a','……その通りだ。ほどけた心は、笑顔になる'],['b','私の心も、今夜ほどけましたわ']],
+              '素直な気持ちにさせることです',
+              [['b','素直に…。私、今夜は随分素直になれましたわ'],['a','甘さは、正直だ。俺も、素直になれる']]]
+          ],
+          [ /* 第7話 */
+            ['n','夜も更けて、秘密の品評会はお開きになった'],
+            ['b','コテツさん、今夜は本当にありがとう。…師匠、と呼ばせてくださいな'],
+            ['a','……師匠はよせ。だが、また甘いもので語り合おう'],
+            ['b','ふふ、約束ですわ。次は私が、お屋敷の隠しお菓子を持ってきます'],
+            ['m','お2人の秘密の品評会、私も光栄です'],
+            ['a','マスター、この店はいい。甘いもの好きが、素直になれる'],
+            ['n','― 秘密の甘味品評会　おわり ―']
+          ]
+        ] },
+      { id:'merry_silver', a:'bomb_s', b:'snow_s', title:'静かな夜の朗読劇', coins:5000, stars:80,
+        blurb:'華やかなスポットライトの疲れを癒やしに来た女優メリーが、シルバの書きためた詩のノートを偶然目にし、「これ、声に出して読んでみてもいい？」と提案。夜のBARが小さな朗読シアターに変わる、ロマンチックな夜の物語。',
+        eps:[
+          [ /* 第1話 */
+            ['n','ステージ帰りの女優が、詩人のノートに目を留めた'],
+            ['a','…あら、そのノート。詩が、びっしりね'],
+            ['b','……！　あ、これは、その…見せるようなものじゃ、なくて'],
+            ['a','隠さなくていいのよ。言葉が溢れてるノートは、綺麗だもの'],
+            ['b','綺麗…？　僕の言葉が、ですか'],
+            ['m','お2人とも、今夜は静かな夜になりそうですね']
+          ],
+          [ /* 第2話 */
+            ['a','私ね、今日も大きな舞台だったの。拍手は嬉しいけど、少し疲れちゃった'],
+            ['b','……大きな音の世界は、疲れます。静けさが、恋しくなります'],
+            ['d','warm',
+              [['a','まろやか…。肩の力が、すっと抜けるわ'],['b','……温かい。雪山の小屋の、暖炉みたいだ']],
+              [['a','ありがとう。…今夜は、温かくまろやかな一杯に包まれたかったの'],['b','すまん、マスター。次は温かいので、頼む']]],
+            ['a','シルバは、どうして詩を書くの？'],
+            ['b','言葉にしないと、胸の中で、景色が凍ってしまうから…です']
+          ],
+          [ /* 第3話（2択） */
+            ['a','ねえシルバ、お願いがあるの'],
+            ['b','お願い…？'],
+            ['a','その詩、私に読ませて。…いえ、声に出して、読んでみたいの'],
+            ['q','a','マスター、どう思う？　シルバの詩を、私が朗読するのはどうかしら',
+              '素敵です。詩に声の命が吹き込まれます',
+              [['a','ふふ、そうよね'],['b','声の、命…。僕の詩が、そんなふうに…']],
+              'シルバの気持ちを聞いてからです',
+              [['b','……ありがとう、マスター。でも…聞いてみたい。メリーの声で、僕の詩を'],['a','決まりね。シルバの許可、出たわよ']]]
+          ],
+          [ /* 第4話 */
+            ['n','メリーはノートを受け取り、静かにページを開いた'],
+            ['a','「雪の夜に」…。……（朗読）「白い静けさは、迷子の心を、そっと包む」'],
+            ['b','……！　僕の詩が…こんなに、温かい声で…'],
+            ['a','いい詩ね、シルバ。声に出すと、景色が立ち上がってくる'],
+            ['b','僕は…自分の言葉が、嫌いだった。うまく話せないから'],
+            ['m','（BARが、小さな劇場になったみたいだ…）']
+          ],
+          [ /* 第5話（ドリンク） */
+            ['n','朗読の合間、マスターがほろ苦い一杯を2人に届けた'],
+            ['a','あなたの詩は、不器用なんかじゃないわ。研ぎ澄まされてるの'],
+            ['b','研ぎ澄まされた、言葉…'],
+            ['d','bitter',
+              [['b','ほろ苦い…。詩の余韻に、似ている'],['a','大人の味ね。静かな夜の朗読には、これが似合うわ']],
+              [['b','ありがとう。…詩の余韻には、ほろ苦い一杯が寄り添う気がして'],['a','ふふ、次はほろ苦いのでお願いね、マスター']]],
+            ['a','次のページも、読んでいい？'],
+            ['b','……はい。ぜひ、続けてください']
+          ],
+          [ /* 第6話（2択） */
+            ['b','メリー。…どうして、そんなにまっすぐ声が出せるんですか'],
+            ['a','舞台で、何千回も言葉を届けてきたからかしら'],
+            ['q','b','マスター。言葉を届けるのに、一番大切なのは何だと思いますか',
+              '上手さより、気持ちです',
+              [['b','気持ち…。僕の詩にも、気持ちは、あるはずで'],['a','ええ、たっぷりあるわ。それが私を動かしたの']],
+              '聞いてくれる人の存在です',
+              [['a','その通りよ。届ける相手がいて、初めて言葉になるの'],['b','聞いてくれる人…。今夜、僕には、それがいるんですね']]]
+          ],
+          [ /* 第7話 */
+            ['n','夜の終わり、BARは小さな朗読シアターの余韻に包まれていた'],
+            ['a','シルバ、今夜はありがとう。私、スポットライトの疲れが、すっかり取れたわ'],
+            ['b','こちらこそ。僕の詩に、声をくれて…ありがとう'],
+            ['m','素敵な朗読劇でした。お2人の夜、忘れません'],
+            ['a','マスター、この夜のことは秘密よ。静かな夜の、小さな劇場'],
+            ['b','また…雪の詩を書いたら、最初に、メリーに読んでほしい'],
+            ['n','― 静かな夜の朗読劇　おわり ―']
+          ]
+        ] },
+      { id:'gen_rapid', a:'manu_s', b:'chee_s', title:'急がば回れの宝探し', coins:5000, stars:80,
+        blurb:'いつも全力疾走で焦りがちなラピッドが、頑固でマイペースな学者ゲンに「街はずれの古い時計台まで、絶対に走らず歩いて荷物を持ってきてくれ」と不思議な依頼をされる。ゆっくり歩くことで初めて見える街の優しさに気づく、心温まる物語。',
+        eps:[
+          [ /* 第1話 */
+            ['n','学者から配達員へ、不思議な依頼が舞い込んだ'],
+            ['a','ラピッドや、頼みがあるんじゃ'],
+            ['b','任せて！　どこへでも、ビューンと届けるよ！'],
+            ['a','街はずれの古い時計台じゃ。じゃが、条件がある。「絶対に走らず、歩いて」運んでほしいんじゃ'],
+            ['b','ええっ！？　歩いて…？　ぼくの脚がうずうずしちゃうよ'],
+            ['a','ふむ。それが、今回の依頼の肝じゃ'],
+            ['m','お2人のやりとり、なんだか面白いことになりそうです']
+          ],
+          [ /* 第2話 */
+            ['b','ゲンさん、どうして走っちゃダメなの？　速いほうがいいじゃないか'],
+            ['a','速さがすべてではない、ということじゃよ'],
+            ['d','warm',
+              [['a','ふむ…温かくまろやかな味じゃ。急ぐ心が、ほどけるのう'],['b','温かい…。はあ、少し落ち着くかも']],
+              [['a','ふむ。悪くはないが、長話の夜には温かくまろやかな一杯が合うのじゃ'],['b','マスター、次は温かいので頼むよ']]],
+            ['a','荷物は壊れ物じゃ。走れば揺れる。歩く速さが、ちょうどいい'],
+            ['b','壊れ物…！　それを先に言ってよ〜']
+          ],
+          [ /* 第3話（2択） */
+            ['a','それと、もうひとつ。道中、寄り道をしても構わんぞ'],
+            ['b','寄り道！？　配達員が寄り道なんて、初めて言われたよ'],
+            ['q','a','マスター、どう思うかのう。急がない配達にも、意味はあると思うか？',
+              'あります。道中の景色も届け物です',
+              [['a','その通りじゃ。景色もまた、荷物のうちじゃよ'],['b','景色も荷物…。なんだか、詩みたいだね']],
+              '時には、寄り道が近道になります',
+              [['b','寄り道が近道…？　ぼくには新しい考え方だなあ'],['a','ふむ、良い答えじゃ。人生の縮図じゃよ']]]
+          ],
+          [ /* 第4話 */
+            ['n','翌日の夕方、ラピッドはゆっくり歩いた話を興奮気味に語った'],
+            ['b','ゲンさん、聞いて！　歩いてたら、川沿いの花畑を見つけたんだ！'],
+            ['a','ほう…いつもの道の、川沿いじゃな'],
+            ['b','いつも走って通り過ぎてたから、気づかなかった。あと、時計台の近くのパン屋さん、すごくいい匂いだった！'],
+            ['a','ふふ、そうじゃろう。歩く速さで見える景色は、格別じゃ'],
+            ['m','ラピッドさん、目がキラキラしてますよ']
+          ],
+          [ /* 第5話（ドリンク） */
+            ['n','宝探しのような配達の報告に、マスターがすっきりした一杯を届けた'],
+            ['b','荷物も無事に届いたよ！　中身は…古い星図だったんだね'],
+            ['a','そうじゃ。時計台の管理人に、返しそびれていた星図じゃ'],
+            ['d','fresh',
+              [['b','すっきりー！　歩いた後の体に、しみる〜'],['a','うむ、澄んだ味じゃ。星図の星空のように、澄んでおる']],
+              [['b','ありがとう！　…歩いた後には、すっきり爽やかな一杯がほしかったな'],['a','ふむ、次は爽やかなのを頼むぞ、マスター']]],
+            ['b','管理人のおじいさん、すごく喜んでた。星図を見ながら、昔話まで聞いちゃった']
+          ],
+          [ /* 第6話（2択） */
+            ['b','ねえゲンさん、これって本当は「宝探し」だったんじゃない？'],
+            ['a','ほう、なぜそう思う'],
+            ['b','だって、道中で見つけた景色が、全部宝物みたいだったから！'],
+            ['q','b','マスターはどう思う？　「急がば回れ」って、本当だと思う？',
+              '本当です。遠回りにこそ宝物があります',
+              [['b','だよね！　ぼく、身をもって分かったよ'],['a','ふむふむ、若い者が気づくとは、嬉しいのう']],
+              '急ぐべき時は、急ぐのも大事です',
+              [['a','うむ、それも真理じゃ。使い分けこそ、知恵じゃよ'],['b','使い分け、かあ。ぼくも、少しずつ覚えていくよ']]]
+          ],
+          [ /* 第7話 */
+            ['n','夜も更けて、2人のグラスが静かに鳴った'],
+            ['b','ゲンさん、今日の依頼、ありがとう。ぼく、少しだけ「止まる勇気」が分かった気がする'],
+            ['a','ふむ、いい目になったのう。次も、歩く配達を頼むかもしれんぞ'],
+            ['b','任せて！　…歩くほうも、ね'],
+            ['m','お2人の宝探し、私も聞いていて楽しかったです'],
+            ['a','マスター、急がば回れじゃ。この店の一杯も、その証拠じゃよ'],
+            ['n','― 急がば回れの宝探し　おわり ―']
+          ]
         ] }
     ];
     function pairDef(id){
@@ -7876,6 +8231,23 @@
         if (h < 3) msgs.push(c.fixedName + 'の仲良し度がハート3つに届いていません（いま ' + hearts(h) + '）');
       });
       return msgs;
+    }
+    /* 本棚の📖バッジの表示更新：未購入で、購入条件（2匹の解放＋
+       仲良し度ハート3つ以上）を満たし、いまのコインと⭐で買える
+       物語が1つでもあれば表示する。renderStatus から呼ばれるので、
+       コイン・星・招待・仲良し度の変化にそのまま追随する */
+    function updateShelfBadge(){
+      var badge = $('shelfBadge');
+      if (!badge) return;
+      var can = false;
+      for (var i = 0; i < PAIR_STORIES.length; i++){
+        var def = PAIR_STORIES[i];
+        if (pairState(def.id).owned) continue;
+        if (pairUnlockMsgs(def).length) continue;
+        if (state.coins < def.coins || state.stars < def.stars) continue;
+        can = true; break;
+      }
+      badge.style.display = can ? '' : 'none';
     }
     var pairConfirm = null;
     function buyPairStory(id){
