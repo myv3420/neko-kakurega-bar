@@ -2304,6 +2304,9 @@
           既読のメモがある猫に、メモに合う味の系統（taste、内部のみ）の
           一杯を提供すると解決になり、お礼の張り紙＋小さな報酬が入る。
           解決した続き話は次回の更新（精算後など）で貼られる。
+          第3話まで完走したシリーズも消えっぱなしにはならず、未完の
+          シリーズが候補に無いときに第1話から再出現する（完走の記録は
+          storyDone に残り、後日談の読み返しは再出現中も維持される）。
           連載メモの各話には短い後日談（ミニストーリー本文）があり、
           解決するとお礼の張り紙に添えられるほか、ずかんの猫詳細から
           解決済みの話の分をいつでも読み返せる（解決状況は storyNext
@@ -2572,12 +2575,24 @@
        unreadThanks＝お礼タブの未読件数。旧セーブには移行で補う */
     function boardState(){
       if (!state.board || typeof state.board !== 'object'){
-        state.board = { requests:[], memos:[], storyNext:{}, tweetsUsed:[], thanks:[], rot:0, postCount:0, offers:[], unreadThanks:0 };
+        state.board = { requests:[], memos:[], storyNext:{}, storyDone:{}, tweetsUsed:[], thanks:[], rot:0, postCount:0, offers:[], unreadThanks:0 };
       }
       var b = state.board;
       if (!Array.isArray(b.requests)) b.requests = [];
       if (!Array.isArray(b.memos)) b.memos = [];
       if (!b.storyNext || typeof b.storyNext !== 'object') b.storyNext = {};
+      /* storyDone＝第3話まで完走したことがあるシリーズの記録。
+         完走済みシリーズは常連メモに第1話から再出現する（storyNext は
+         1に戻る）ため、ずかんの後日談読み返しは storyNext だけでなく
+         この記録でも維持する。旧セーブには storyNext から復元する */
+      if (!b.storyDone || typeof b.storyDone !== 'object'){
+        b.storyDone = {};
+        if (typeof MEMO_STORIES !== 'undefined'){
+          Object.keys(MEMO_STORIES).forEach(function(k){
+            if ((b.storyNext[k] || 1) > MEMO_STORIES[k].eps.length) b.storyDone[k] = true;
+          });
+        }
+      }
       if (!Array.isArray(b.tweetsUsed)) b.tweetsUsed = [];
       if (!Array.isArray(b.thanks)) b.thanks = [];
       if (!Array.isArray(b.offers)) b.offers = [];
@@ -2795,7 +2810,10 @@
       }
     }
     /* 次のメモを1件貼る。未解決のメモが貼ってある間は貼り替えない。
-       連続メモはシリーズをローテーションし、3件に1件はつぶやきを挟む */
+       連続メモはシリーズをローテーションし、3件に1件はつぶやきを挟む。
+       未完のシリーズが1つも無いときは、第3話まで完走したシリーズが
+       第1話から再出現する（再スタート）。未完シリーズが候補にいる間は
+       そちらが優先され、再出現が出現を妨げることはない */
     function boardPostNextMemo(b){
       if (b.memos.some(function(m){ return !m.solved; })) return;
       b.memos = [];
@@ -2818,6 +2836,21 @@
         if (next <= MEMO_STORIES[key].eps.length){
           b.memos.push({ type:'story', key:key, ep:next, read:false, solved:false });
           b.rot = start + i + 1;
+          b.postCount++;
+          return;
+        }
+      }
+      /* 完走済みシリーズの再出現：ローテーション順に探し、storyNext を
+         1に戻して第1話から貼り直す。完走の記録（storyDone）と、お礼の
+         張り紙に保存された後日談はそのまま残るので、ずかんからの
+         読み返しは再出現中も失われない */
+      for (var j = 0; j < keys.length; j++){
+        var key2 = keys[(start + j) % keys.length];
+        var next2 = b.storyNext[key2] || 1;
+        if (next2 > MEMO_STORIES[key2].eps.length){
+          b.storyNext[key2] = 1;
+          b.memos.push({ type:'story', key:key2, ep:1, read:false, solved:false });
+          b.rot = start + j + 1;
           b.postCount++;
           return;
         }
@@ -2977,7 +3010,16 @@
           var memoTag = occ.orderEl.querySelector('.ob-memo');
           if (memoTag && memoTag.parentNode) memoTag.parentNode.removeChild(memoTag);
         }
-        if (m.type === 'story') b.storyNext[m.key] = m.ep + 1;
+        if (m.type === 'story'){
+          b.storyNext[m.key] = m.ep + 1;
+          /* 最終話を解いたら完走として記録する（再出現しても、ずかんの
+             後日談読み返しが巻き戻らないようにするため） */
+          var stDef = MEMO_STORIES[m.key];
+          if (stDef && m.ep >= stDef.eps.length){
+            if (!b.storyDone || typeof b.storyDone !== 'object') b.storyDone = {};
+            b.storyDone[m.key] = true;
+          }
+        }
         boardAddThanks(md.catName + '（' + md.breed + '）', md.thanks,
           md.after ? { label: (md.seriesTitle || '') + ' 第' + m.ep + '話', text: md.after } : null);
         addCoins(30);
@@ -10180,6 +10222,9 @@
         if (memoKey){
           var mst = MEMO_STORIES[memoKey];
           var solvedEps = Math.min((boardState().storyNext[memoKey] || 1) - 1, mst.eps.length);
+          /* 完走済みシリーズは常連メモに再出現して storyNext が 1 に
+             戻るが、一度完走した分の後日談は読み返せるままにする */
+          if ((boardState().storyDone || {})[memoKey]) solvedEps = mst.eps.length;
           if (solvedEps > 0){
             memoHtml = '<div class="zukan-after"><div class="za-title">📖 常連メモ「' + mst.title + '」の後日談（' + solvedEps + '／' + mst.eps.length + '話 解決）</div>' +
               mst.eps.slice(0, solvedEps).map(function(ep, i){
