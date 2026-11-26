@@ -1594,6 +1594,15 @@
 
     <script>
     'use strict';
+    /* ---------- DOM参照ヘルパー（$） ----------
+       スクリプトの冒頭で定義する。以前は定義がファイル中盤にあり、
+       それより前にある即時実行コード（在庫不足ポップのイベント登録）が
+       「$ is not a function」で例外を投げ、スクリプト全体が起動途中で
+       止まってしまった。その結果、セーブの読み込みも画面更新も一切
+       動かず、保存済みデータが残っていても「リセットされた」ように
+       見えた（実際のセーブデータは上書きされていない）。
+       $ を使う即時実行コードより必ず前に置くこと */
+    var $ = function(id){ return document.getElementById(id); };
     /* =========================================================
        ねこ隠れ家BAR ― 土台コード
        ■ 猫素材の差し替え方法：
@@ -2215,18 +2224,34 @@
       };
     }
     function loadState(){
-      try {
-        var raw = localStorage.getItem(SAVE_KEY);
-        if (raw){
+      var raw = null;
+      try { raw = localStorage.getItem(SAVE_KEY); } catch(e){}
+      if (raw){
+        try {
           var parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== 'object') throw new Error('bad save');
           var d = defaultState();
           for (var k in d) if (parsed[k] !== undefined) d[k] = parsed[k];
           /* 既存セーブ（helpSeen を持たないセーブ）は、遊び方をすでに
              見たものとして扱い、初回自動表示の対象にしない */
           if (parsed.helpSeen === undefined) d.helpSeen = true;
           return d;
+        } catch(e){
+          /* 既存データがあるのに読み込めなかった場合は、初期データで
+             上書きして消してしまわないよう厳重に保護する：
+             ① 原文を救済キー（SAVE_KEY + '.rescue'）へ複製して残す
+             ② この起動中は自動保存を止め（saveSuppressed）、元の
+                セーブキーには一切書き込まない。バックアップコードや
+                リセットからの復旧操作は従来どおり行える */
+          try {
+            if (!localStorage.getItem(SAVE_KEY + '.rescue')){
+              localStorage.setItem(SAVE_KEY + '.rescue', raw);
+            }
+          } catch(e2){}
+          saveSuppressed = true;
+          return defaultState();
         }
-      } catch(e){}
+      }
       return defaultState();
     }
     /* 既存セーブの移行：在庫・解放状態が無いセーブには初期値を与える。
@@ -3132,12 +3157,18 @@
       pop.style.display = 'none';
       clearTimeout(stockAlertTimer);
     }
+    /* 在庫不足ポップの閉じる操作の登録。ここは $ の定義より前に置かれて
+       いたため $ 未定義で例外になり、ゲーム全体が起動しなくなった
+       前科がある。二度と本体の起動を道連れにしないよう、要素取得は
+       document.getElementById で直接行い、全体を try/catch で隔離する */
     (function(){
-      var pop = $('stockAlert');
-      if (!pop) return;
-      pop.addEventListener('click', function(e){ if (e.target === pop) hideStockAlert(); });
-      var btn = $('stockAlertClose');
-      if (btn) btn.addEventListener('click', hideStockAlert);
+      try {
+        var pop = document.getElementById('stockAlert');
+        if (!pop) return;
+        pop.addEventListener('click', function(e){ if (e.target === pop) hideStockAlert(); });
+        var btn = document.getElementById('stockAlertClose');
+        if (btn) btn.addEventListener('click', hideStockAlert);
+      } catch(e){}
     })();
     var saveTimer = null;
     /* バックアップ復元・セーブリセットの直後は true にして自動保存を
@@ -3555,14 +3586,16 @@
         cloudUpload(prefs.key).then(function(){}, function(){});
       } catch(e){}
     }
-    /* ---------- DOM参照ヘルパー ----------
+    /* ---------- DOM参照ヘルパー（$）はスクリプト冒頭で定義済み ----------
        migrateState() の掲示板移行（boardRefresh → updateBoardBadge）が
-       初期化の早い段階で $ を使うため、state の読み込みより前に定義する。
-       （以前はこの定義が読み込み処理より後ろにあり、掲示板の無い旧セーブで
-        migrateState が例外を投げてスクリプト全体が止まっていた） */
-    var $ = function(id){ return document.getElementById(id); };
+       初期化の早い段階で $ を使うため、$ は state の読み込みより前に
+       使える状態でなければならない（冒頭の定義を参照） */
     state = loadState();
-    migrateState();
+    /* 移行処理で万一例外が出ても、セーブの読み込み自体まで道連れにして
+       「初期状態に見える」事故にしないよう、ここだけ例外を隔離する。
+       移行が途中で止まっても state は読み込み済みの既存データのまま
+       起動し、既存セーブを初期データで上書きすることはない */
+    try { migrateState(); } catch(e){}
     /* 永続ストレージ申請：起動時に、ブラウザへ「このサイトのデータは
        自動整理で消さないで」とお願いする（navigator.storage.persist）。
        対応ブラウザでのみ有効で、申請できない・失敗してもゲームの
