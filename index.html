@@ -722,11 +722,24 @@
       /* 材料ピッカー（モーダル内のアイコン＋名前グリッド） */
       .pick-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
       .pick-item{
+        position:relative;
         cursor:pointer; font-family:inherit; color:var(--ink);
         display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
         background:#fff; border:2.5px solid #E4D2AC; border-radius:14px;
         padding:9px 4px 8px; min-height:78px;
         transition:transform .08s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
+      }
+      /* お悩み相談ヒント（案1）：相談中の猫に合う味を持つ素材・レシピに付く小さな💭。
+         吹き出し側は一切変えず、ピッカーとレシピ一覧だけに添える */
+      .consult-hint{
+        display:inline-flex; align-items:center; justify-content:center;
+        font-size:11px; line-height:1; margin-left:5px; vertical-align:2px;
+        background:#FDF0F3; border:1.5px solid #C97B9B; border-radius:999px;
+        padding:2px 5px; pointer-events:none;
+      }
+      .pick-item .consult-hint{
+        position:absolute; top:5px; right:5px; margin:0; padding:2px 4px;
+        font-size:12px; box-shadow:0 1px 3px rgba(74,53,37,.18);
       }
       .pick-item svg{ width:34px; height:34px; }
       .pick-item .pick-name{ font-size:11.5px; font-weight:800; line-height:1.25; text-align:center; }
@@ -9110,15 +9123,43 @@
       if (hadTray) toast('トレイのドリンクを作り替えました', '「' + recipe.name + '」完成！ 飲みたい猫をタップしてね');
       else toast('「' + recipe.name + '」を作りました！', '飲みたい猫をタップしてね');
     }
+    /* お悩み相談ヒント（案1）用の適合味：店内にいる相談中の猫
+       （orderType==='consult'）の consultTaste を集める。判定は既存の
+       提供判定・猫のグロー判定と同一で、consultTaste は相談データの
+       taste そのもの、味の照合は drinkTasteKeys／ingTasteKeys
+       （TASTE_OF が唯一の定義）を通すため、表示と判定がずれない。
+       相談の猫がいなければ空配列になり、マークは一切付かない。
+       複数いる場合はどれか1つに合えば対象になる（OR条件） */
+    function activeConsultTastes(){
+      var seen = {}, list = [];
+      occupants.forEach(function(o){
+        if (o && o.orderType === 'consult' && o.consultTaste && !seen[o.consultTaste]){
+          seen[o.consultTaste] = true; list.push(o.consultTaste);
+        }
+      });
+      return list;
+    }
+    function recipeMatchesConsult(r, tastes){
+      if (!r || !tastes.length) return false;
+      var ks = drinkTasteKeys(r);
+      return tastes.some(function(t){ return ks.indexOf(t) !== -1; });
+    }
+    function ingMatchesConsult(kind, id, tastes){
+      if (!tastes.length) return false;
+      var ks = ingTasteKeys(kind, id);
+      return tastes.some(function(t){ return ks.indexOf(t) !== -1; });
+    }
     function renderModalBody(){
       var body = $('modalBody');
       if (currentModal === 'pick'){
         var pk = pickKind || 'base';
+        var consultTastesPick = activeConsultTastes();
         var phtml = '<p class="modal-note">' + CAT_LABEL[pk] + 'をひとつ選んでね。在庫が0の材料は選べません。「補充」タブで仕入れられます。</p><div class="pick-grid">';
         availableIng(pk).forEach(function(item){
           var n = stockOf(pk, item.id);
           var out = n <= 0;
           phtml += '<button class="pick-item' + (sel[pk] === item.id ? ' sel' : '') + (out ? ' out' : '') + '" data-pick="' + item.id + '" type="button"' + (out ? ' disabled' : '') + '>' +
+            (ingMatchesConsult(pk, item.id, consultTastesPick) ? '<span class="consult-hint" title="お悩み相談に合いそう">💭</span>' : '') +
             chipIcon(pk, item.id) +
             '<span class="pick-name">' + item.name + '</span>' +
             '<span class="pick-stock' + (!out && n <= 3 ? ' low' : '') + '">' + (out ? '在庫なし' : 'のこり ' + n + (n <= 3 ? '（わずか）' : '')) + '</span></button>';
@@ -9136,12 +9177,14 @@
       if (currentModal === 'menu'){
         /* レシピ行のHTML（発見済み＝タップでそのまま作れる／未発見＝？？？＋ヒントでタップ不可）。
            解放済みの特別レシピは⭐つきで表示する */
+        var consultTastesMenu = activeConsultTastes();
         function recipeRowHtml(r){
           var found = state.discovered.indexOf(r.id) !== -1;
           var special = isSpecial(r.id);
+          var consultHint = recipeMatchesConsult(r, consultTastesMenu) ? '<span class="consult-hint" title="お悩み相談に合いそう">💭</span>' : '';
           return '<div class="recipe-row' + (found ? ' tappable' : ' locked') + '"' + (found ? ' data-recipe="' + r.id + '" role="button" tabindex="0"' : '') + '>' +
             '<div class="r-icon">' + (found ? drinkSVG(r, 40) : '<svg viewBox="0 0 48 48" width="40" height="40"><circle cx="24" cy="24" r="17" fill="#D8C39A"/><text x="24" y="32" text-anchor="middle" font-size="22" font-weight="800" fill="#FFF8E7">？</text></svg>') + '</div>' +
-            '<div><div class="r-name">' + (found ? (special ? '⭐ ' : '') + r.name : '？？？') + '</div>' +
+            '<div><div class="r-name">' + (found ? (special ? '⭐ ' : '') + r.name : '？？？') + consultHint + '</div>' +
             '<div class="r-ing">' + (found
               ? ingName('base', r.base) + ' ＋ ' + ingName('mixer', r.mixer) + ' ＋ ' + ingName('snack', r.snack)
               : 'ヒント：' + r.hint) + '</div></div>' +
@@ -9168,7 +9211,10 @@
           availableIng('base').forEach(function(item){
             var blist = listable.filter(function(r){ return r.base === item.id; });
             var bfound = blist.filter(function(r){ return state.discovered.indexOf(r.id) !== -1; }).length;
+            var baseConsultHint = blist.some(function(r){ return recipeMatchesConsult(r, consultTastesMenu); })
+              ? '<span class="consult-hint" title="お悩み相談に合いそうなレシピがあります">💭</span>' : '';
             html += '<button class="pick-item" data-menubase="' + item.id + '" type="button">' +
+              baseConsultHint +
               chipIcon('base', item.id) +
               '<span class="pick-name">' + item.name + '</span>' +
               '<span class="pick-count">レシピ ' + bfound + '/' + blist.length + ' 発見</span></button>';
