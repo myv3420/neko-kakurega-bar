@@ -2338,6 +2338,7 @@
         stories: {},              // VIP猫の連続相談の進行 { catId: {ep, done, choices, trends, endings, badges, session} }
         invited: [],              // 特別招待で招待状を送ったネコ科VIPの catId（来店対象になる）
         inviteFirst: [],          // 招待直後の「初回確定来店」の予約（消費されるまで保持される catId）
+        vipCall: null,            // お呼び出し招待状の予約（呼んだVIPの catId。来店が実現するまで保持され、同時に予約できるのは1件だけ）
         pairStories: {},          // VIPペア特別ストーリー { pairId: {owned, read, session} }（購入状態・読書進行）
         board: null,              // お店の掲示板 { requests, memos, storyNext, tweetsUsed, thanks, rot, postCount }（移行処理で初期化）
         helpSeen: false           // 遊び方モーダルを見たか（初回起動時の自動表示は1回だけ。閉じたときに true を保存する）
@@ -2411,6 +2412,14 @@
          与える。ゲン・レオとも未招待から始まり、招待するまで来店しない */
       if (!Array.isArray(state.invited)) state.invited = [];
       if (!Array.isArray(state.inviteFirst)) state.inviteFirst = [];
+      /* お呼び出し招待状の移行：無いセーブ（既存セーブ含む）には予約なし
+         （null）を与える。不正な値や存在しない猫・VIPでない猫の予約は
+         掃除して、通常の来店抽選に影響しないようにする */
+      if (typeof state.vipCall !== 'string' || !state.vipCall) state.vipCall = null;
+      if (state.vipCall){
+        var vcCat = catById(state.vipCall);
+        if (!vcCat || !vcCat.vip) state.vipCall = null;
+      }
       /* VIPペア特別ストーリーの移行：無いセーブには空の記録を与える。
          各ペアの詳細は pairState() が初回アクセス時に初期値で作る */
       if (!state.pairStories || typeof state.pairStories !== 'object') state.pairStories = {};
@@ -4384,6 +4393,11 @@
        ときだけセットされ、spawnCat が読み取って連続相談の第1話を
        確定で発生させる（通常の物語抽選を経ない） */
     var pendingInviteFirst = null;
+    /* お呼び出し招待状の確定来店：pickCatType が予約（state.vipCall）を
+       消費して対象を返したときだけセットされ、spawnCat が読み取って、
+       そのVIPの連続相談が未完なら通常の物語抽選を経ずに次の話を
+       確定で発生させる（完結済みなら通常の来店として扱う） */
+    var pendingVipCall = null;
     /* 家猫VIPの段階解放：unlockNight に達するまでは未解放。
        ただし、すでにずかんに登録済み（出会ったことのある）VIPは、
        夜数が閾値未満でも解放済みとして扱う（既存プレイヤー保護：
@@ -4404,6 +4418,7 @@
     function pickCatType(){
       pendingMemoVisitName = null;
       pendingInviteFirst = null;
+      pendingVipCall = null;
       /* 初回確定来店の予約があれば最優先でその猫を来店させる（席が
          空いたタイミングで消費される。店内に同猫がいる間は消費しない）。
          予約はセーブに残るため、招待が夜の終わり際でも次の夜の最初の
@@ -4419,6 +4434,26 @@
             pendingInviteFirst = rid;
             save();
             return rt;
+          }
+        }
+      }
+      /* お呼び出し招待状の予約があれば、そのVIPを確定で来店させる
+         （初回確定来店の次に優先。席が空いたタイミングで消費される。
+         店内に同猫がいる間は消費せず、帰ったあとの空きで実現する。
+         予約はセーブに残るため、夜の終わり際の購入でも次の夜の最初の
+         空きで必ず実現する。対象が解放条件を失うことは通常ないが、
+         万一来店対象でなくなっていたら予約は保持したまま通常抽選へ
+         戻る（購入した招待状が無言で消えることはない） */
+      if (state.vipCall){
+        var callId = state.vipCall;
+        var callHere = occupants.some(function(o){ return !!o && o.catId === callId; });
+        if (!callHere){
+          var callType = catById(callId);
+          if (callType && isCatAvailable(callType)){
+            state.vipCall = null;
+            pendingVipCall = callId;
+            save();
+            return callType;
           }
         }
       }
@@ -5371,9 +5406,18 @@
          続き（初回は第1話）を必ず発生させる */
       var inviteFirstVisit = (pendingInviteFirst === type.id);
       pendingInviteFirst = null;
+      /* お呼び出し招待状での来店：連続相談が未完なら、通常の物語抽選を
+         経ずに次の話（途中のセッションがあればその続き）を確定で
+         発生させる。完結済みの場合は再走の抽選も含めて一切行わず、
+         通常の来店（ふつうの注文）として扱う */
+      var callVisit = (pendingVipCall === type.id);
+      pendingVipCall = null;
       if (type.vip && type.fixedName && typeof STORIES !== 'undefined' && STORIES[type.id]){
         var st0 = storyState(type.id);
         if (st0.session) storyEp = st0.session.ep;
+        else if (callVisit){
+          if (!st0.done) storyEp = st0.ep;
+        }
         else if (inviteFirstVisit && !st0.done) storyEp = st0.ep;
         else if (Math.random() < 0.32){
           if (st0.done){ st0.done = false; st0.ep = 1; st0.choices = []; st0.trends = []; }
@@ -5432,6 +5476,7 @@
                   consultTaste: ord.consult ? ord.consult.taste : null,
                   consultData: ord.consult || null,
                   storyEp: ord.ep || 0,
+                  viaCall: callVisit,
                   phase: type.poses ? 'enter' : 'seated', seatIdx: seatIdx, variantActive: false,
                   flip: flip, walking: false };
       occupants[seatIdx] = occ;
@@ -5451,6 +5496,11 @@
            トーストでも分かるようにする。同じ品種でも名前が違う子には
            📌を付けない */
         toast(visitName + 'が来店しました', '📌 掲示板にこの子のメモが貼ってあります');
+      } else if (callVisit) {
+        /* お呼び出し招待状に応えた来店は、通常の来店と区別できるよう
+           招待状の印つきで知らせる（連続相談が始まる場合は、この後に
+           着席時の物語トーストが続く） */
+        toast('💌 招待状に応えて、' + visitName + 'が来店しました');
       } else {
         toast((type.vip ? '👑VIP猫 ' : '') + visitName + 'が来店しました');
       }
@@ -9630,6 +9680,54 @@
       serv_s: 'サバンナの観測者・星の聴き手。大きな丸い耳と黒い斑点模様、オリーブグリーンの探検ベストとマスタード色のスカーフが目印。'
     };
     var inviteConfirm = null;
+    /* ---------- お呼び出し招待状（お目当てのVIPを呼ぶ） ----------
+       ショップの「招待」タブに追加する、解放済みVIP専用の招待状。
+       家猫VIPはコイン、野生のネコ科VIPは星⭐で買う。価格は一律：
+       家猫＝1,000コイン（ノルマ1夜分前後の稼ぎで手が届き、連発は
+       できない水準）、ネコ科＝⭐50（特別レシピの中堅価格帯と同水準で、
+       貯めた星の使い道として重すぎない額）。
+       買うと state.vipCall に予約が1件だけ入り、pickCatType が次に
+       席が空いたタイミング（または次の夜）でそのVIPを確定来店させる。
+       その来店では、連続相談が未完なら次の話が確定で始まり、完結
+       済みなら通常の来店になる（spawnCat 参照）。
+       買えるのは解放済みのVIPだけ：家猫VIPは夜数解放済みか出会い
+       済み、ネコ科VIPは特別招待済み。店内にいる間・初回確定来店の
+       予約中・別の招待状が予約中のあいだは買えない。購入は確認
+       ステップ（callConfirm）を挟み、残高不足はボタン側で買えない
+       表示にする（購入処理側でも再検証する） */
+    var CALL_COST_COINS = 1000; /* 家猫VIPの招待状 */
+    var CALL_COST_STARS = 50;   /* 野生のネコ科VIPの招待状 */
+    var callConfirm = null;
+    /* そのVIPを招待状で呼べる状態か（解放済みかどうか） */
+    function vipCallUnlocked(c){
+      if (!c || !c.vip) return false;
+      if (c.inviteOnly) return state.invited.indexOf(c.id) !== -1;
+      return isVipNightUnlocked(c);
+    }
+    /* 店内にそのVIPがいるか（入店中・着席中・退店中を含む） */
+    function vipInStore(catId){
+      return occupants.some(function(o){ return !!o && o.catId === catId; });
+    }
+    function buyVipCall(catId){
+      var c = catById(catId);
+      if (!c || !c.vip) return;
+      if (state.vipCall) return; /* 別の招待状が予約中は買えない */
+      if (!vipCallUnlocked(c)) return;
+      if (vipInStore(catId)) return;
+      if (state.inviteFirst && state.inviteFirst.indexOf(catId) !== -1) return;
+      if (c.inviteOnly){
+        if (state.stars < CALL_COST_STARS) return;
+        state.stars -= CALL_COST_STARS;
+      } else {
+        if (state.coins < CALL_COST_COINS) return;
+        state.coins -= CALL_COST_COINS;
+      }
+      state.vipCall = catId;
+      callConfirm = null;
+      save(); renderStatus(); renderModalBody();
+      toast('💌 ' + c.fixedName + '（' + c.breed + '）への招待状を届けました！',
+        '次に席が空いたタイミング（または次の夜）に、必ず来店します。連続相談が未完なら、次の話が確定で始まります');
+    }
     /* ショップモーダル内のタブ：'invite'＝特別招待／'recipe'＝特別レシピ／'story'＝ペア特別ストーリー */
     var shopTab = 'invite';
     /* 思い出の本棚モーダル内のタブ：'regular'＝常連猫（常連メモの後日談）／
@@ -9694,7 +9792,7 @@
          初回起動時の自動表示は1回だけになり、次回以降は開かない。
          🔔からの手動表示はいつでも可能（この処理は表示自体には影響しない） */
       if (currentModal === 'help' && state && !state.helpSeen){ state.helpSeen = true; saveNow(); }
-      closeZukanPop(); $('modalOverlay').classList.remove('open'); currentModal = null; inviteConfirm = null; pairConfirm = null;
+      closeZukanPop(); $('modalOverlay').classList.remove('open'); currentModal = null; inviteConfirm = null; pairConfirm = null; callConfirm = null;
     }
     $('modalClose').addEventListener('click', closeModal);
     /* カウンター右端の掲示板小物タップで掲示板モーダルを開く */
@@ -10192,6 +10290,57 @@
           '<button class="zukan-tab' + (shopTab === 'story' ? ' on' : '') + '" data-shoptab="story" type="button">📚 ストーリー</button>' +
           '</div>';
         if (shopTab === 'invite'){
+        /* --- お呼び出し招待状（解放済みVIPを確実に呼ぶ） --- */
+        html4 += '<div class="invite-sec-title">💌 VIPお呼び出し招待状</div>' +
+          '<p class="invite-note">解放済みのVIPへ招待状を届けると、次に席が空いたタイミング（または次の夜）に必ず来てくれます。家猫VIPは1,000コイン、野生のネコ科VIPは⭐50。招待状で呼んだ来店では、連続相談が未完なら次の話が確定で始まります（完結済みの場合は通常の来店になります）。予約できる招待状は1件までです。</p>';
+        if (state.vipCall){
+          var reservedCat = catById(state.vipCall);
+          if (reservedCat) html4 += '<p class="invite-note">💌 現在、' + reservedCat.fixedName + '（' + reservedCat.breed + '）への招待状が予約中です。次の空き席で来店します。</p>';
+        }
+        CAT_MASTER.filter(function(c){ return c.vip; }).forEach(function(c){
+          var wild = !!c.inviteOnly;
+          var costLabel = wild ? '⭐' + CALL_COST_STARS : CALL_COST_COINS + 'コイン';
+          var unlockedCall = vipCallUnlocked(c);
+          var reservedThis = state.vipCall === c.id;
+          var reservedOther = !!state.vipCall && !reservedThis;
+          var inStore = vipInStore(c.id);
+          var firstPend = !!(state.inviteFirst && state.inviteFirst.indexOf(c.id) !== -1);
+          var shortBalance = wild ? (state.stars < CALL_COST_STARS) : (state.coins < CALL_COST_COINS);
+          var desc = '';
+          if (!unlockedCall){
+            desc = wild
+              ? (INVITE_BLURB[c.id] || '') + '<br>※ 先に下の「特別招待」で招待すると、呼べるようになります'
+              : '第' + c.unlockNight + '夜で解放されます（出会ったことのあるVIPは呼べます）';
+          } else {
+            var stc = storyState(c.id);
+            desc = (wild ? (INVITE_BLURB[c.id] || '') + '<br>' : '') +
+              (stc.done
+                ? '📖 連続相談は全5話 完結済み（招待状の来店は通常の注文になります）'
+                : stc.session
+                  ? '📖 連続相談 第' + stc.session.ep + '話の途中です（招待状の来店で続きが確定で始まります）'
+                  : '📖 連続相談 第' + stc.ep + '話が、招待状の来店で確定で始まります') +
+              '<br>招待状：' + costLabel;
+          }
+          var act = '';
+          if (reservedThis) act = '<span class="owned-tag">💌 予約中<br>次の空き席で来店します</span>';
+          else if (!unlockedCall) act = '<button class="buy-btn" disabled>🔒 まだ呼べません</button>';
+          else if (reservedOther) act = '<button class="buy-btn" disabled>別の招待状が予約中です</button>';
+          else if (inStore) act = '<button class="buy-btn" disabled>店内にいます</button>';
+          else if (firstPend) act = '<button class="buy-btn" disabled>初回訪問の予約中です</button>';
+          else if (shortBalance) act = '<button class="buy-btn" disabled>💌 招待状を買う <span class="price">' + costLabel + '</span><br>' + (wild ? '⭐が足りません' : 'コインが足りません') + '</button>';
+          else act = '<button class="buy-btn" data-call="' + c.id + '">💌 招待状を買う <span class="price">' + costLabel + '</span></button>';
+          html4 += '<div class="shop-row"><img class="invite-img' + (unlockedCall ? '' : ' locked') + '" src="' + c.poses.stand + '" alt="">' +
+            '<div><div class="s-name">👑 ' + (unlockedCall || wild ? c.fixedName : '？？？') + '（' + c.breed + '）</div><div class="s-desc">' + desc + '</div></div>' +
+            '<div class="s-act">' + act + '</div></div>';
+          if (callConfirm === c.id && unlockedCall && !reservedThis && !reservedOther && !inStore && !firstPend && !shortBalance){
+            html4 += '<div class="invite-confirm">' + c.fixedName + '（' + c.breed + '）へ招待状を届けますか？<br>' +
+              costLabel + 'を使ってお呼び出しします。次に席が空いたタイミング（または次の夜）に必ず来店し、連続相談が未完なら次の話が確定で始まります。届けたあとは取り消せません。' +
+              '<div class="ic-btns">' +
+              '<button class="buy-btn" data-call-send="' + c.id + '" type="button">💌 届ける（' + costLabel + '）</button>' +
+              '<button class="buy-btn" data-call-cancel="1" type="button">やめる</button>' +
+              '</div></div>';
+          }
+        });
         html4 += '<div class="invite-sec-title">✉️ 特別招待（ネコ科VIP）</div>' +
           '<p class="invite-note">遠方に暮らす希少なネコ科のお客さまへ「隠れ家BARの招待状」を送れます。招待状を送ると、席が空いたタイミング（または次の夜）に必ず1回会いに来てくれて、連続相談の第1話が始まります。その後は、他のVIPと同じくふらりと来店します。</p>';
         INVITE_DEFS.forEach(function(def){
@@ -10249,6 +10398,7 @@
             shopTab = b.getAttribute('data-shoptab');
             pairConfirm = null;
             inviteConfirm = null;
+            callConfirm = null;
             renderModalBody();
           });
         });
@@ -10269,6 +10419,23 @@
         });
         body.querySelectorAll('[data-invite-send]').forEach(function(b){
           b.addEventListener('click', function(){ sendInvitation(b.getAttribute('data-invite-send')); });
+        });
+        /* お呼び出し招待状：特別招待と同じく、1回目のタップで確認
+           ステップを表示し、確認行の「届ける」でもう一度タップして
+           初めてコイン／⭐を消費する */
+        body.querySelectorAll('[data-call]').forEach(function(b){
+          b.addEventListener('click', function(){
+            callConfirm = b.getAttribute('data-call');
+            renderModalBody();
+          });
+        });
+        var callCancelBtn = body.querySelector('[data-call-cancel]');
+        if (callCancelBtn) callCancelBtn.addEventListener('click', function(){
+          callConfirm = null;
+          renderModalBody();
+        });
+        body.querySelectorAll('[data-call-send]').forEach(function(b){
+          b.addEventListener('click', function(){ buyVipCall(b.getAttribute('data-call-send')); });
         });
         body.querySelectorAll('[data-special]').forEach(function(b){
           b.addEventListener('click', function(){
@@ -10493,7 +10660,7 @@
           ['📌 お店の掲示板', 'カウンター右端の掲示板をタップすると、近所のお店（全7軒）との「おすそわけ」や、常連猫のメモなどのお知らせが見られます。依頼は各店の店主猫からのもので、納品するとお店への配達回数が増え、思い出の本棚「ご近所さん」の物語が少しずつ解放されます。'],
           ['📚 思い出の本棚', '店内の右奥の壁にある飾り棚（観葉植物と本が並んだ棚で、淡く光っています）をタップすると「思い出の本棚」が開きます。「常連猫」「VIP猫」「特別なお話」「ご近所さん」の4タブがあり、常連メモの後日談、VIP猫の連続相談（進み具合・結末・思い出バッジの確認と読み返し）、VIP猫同士の掛け合いが描かれる「ペア特別ストーリー」（各組・全7話）を読み返せます。「ご近所さん」タブでは、おすそわけ先のお店の店主紹介と、お店ごとの物語（各3話）が読めます。物語は、そのお店への配達が2回・5回・9回になるごとに1話ずつ解放されます。ペア特別ストーリーは、対象の2匹が解放済みで、仲良し度が両方ともハート3つ以上になると、コインと⭐で購入できます。ショップの「ストーリー」タブからも同じ物語を購入・閲覧できます。'],
           ['🌙 今夜のテーマ', '夜ごとにテーマが変わり、注文の傾向やBGMが少し変わります。雨の夜だけ、雨音が聞こえます。'],
-          ['👑 VIP猫', 'めったに来ない特別なお客さまです。連続お悩み相談（全5話）があり、最後まで寄り添うと思い出バッジがもらえます。VIP猫は夜が進むにつれて少しずつ来店するようになります（ずかんのVIP猫タブで「第○夜で解放」と表示されます）。遠方のネコ科VIPは、ショップの「特別招待」で招待できます。'],
+          ['👑 VIP猫', 'めったに来ない特別なお客さまです。連続お悩み相談（全5話）があり、最後まで寄り添うと思い出バッジがもらえます。VIP猫は夜が進むにつれて少しずつ来店するようになります（ずかんのVIP猫タブで「第○夜で解放」と表示されます）。遠方のネコ科VIPは、ショップの「特別招待」で招待できます。解放済みのVIPは、ショップの「VIPお呼び出し招待状」（家猫VIPは1,000コイン、ネコ科VIPは⭐50）で確実に呼ぶこともできます。招待状で呼んだ来店では、連続相談が未完なら次の話が確定で始まります。'],
           ['💾 セーブについて', '記録は自動でこの端末に保存されます。閉じても、次に開いたとき続きから遊べます。']
         ];
         var htmlH = '<p class="modal-note">ようこそ、ねこ隠れ家BARへ。猫たちに手作りドリンクをふるまう、小さな夜のお店です。</p>';
