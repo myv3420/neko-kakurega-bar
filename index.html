@@ -827,6 +827,40 @@
         padding:5px 8px calc(5px + env(safe-area-inset-bottom));
       }
       #trayRow{ display:flex; gap:7px; align-items:stretch; }
+      /* ストーリーに戻るバー：ペア／3匹特別ストーリーの「ドリンクを出す」
+         ステップでトーク画面を閉じてメイン画面で作っている間だけ、
+         下部パネルの一番上に常時表示する。トレイに一杯できると
+         .ready で目立つ表示（淡い光のパルス＋案内文）に変わる */
+      #storyReturnBar{
+        display:none; align-items:center; gap:8px;
+        margin-bottom:5px; padding:6px 8px 6px 11px;
+        background:#FDF3E3; border:2.5px solid var(--wood); border-radius:13px;
+      }
+      #storyReturnBar.ready{
+        background:#FFF0C4; border-color:var(--accent-deep);
+        animation:storyReadyPulse 1.6s ease-in-out infinite;
+      }
+      @keyframes storyReadyPulse{
+        0%,100%{ box-shadow:0 0 0 2px rgba(245,197,66,.35), 0 2px 6px rgba(180,110,30,.25); }
+        50%{ box-shadow:0 0 0 5px rgba(245,197,66,.65), 0 2px 8px rgba(180,110,30,.4); }
+      }
+      @media (prefers-reduced-motion: reduce){ #storyReturnBar.ready{ animation:none; box-shadow:0 0 0 4px rgba(245,197,66,.55); } }
+      .srb-text{ flex:1 1 auto; min-width:0; }
+      #storyReturnTitle{ font-size:12.5px; font-weight:800; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      #storyReturnSub{ font-size:10.5px; font-weight:700; color:var(--wood-dark); line-height:1.35; }
+      #storyReturnBar.ready #storyReturnSub{ color:#8A5A12; }
+      #storyReturnBtn{
+        flex:0 0 auto; cursor:pointer; font-family:inherit;
+        min-height:40px; padding:7px 13px;
+        font-size:13px; font-weight:800; color:#fff; white-space:nowrap;
+        background:linear-gradient(180deg,#F2B26B,var(--accent-deep));
+        border:2.5px solid var(--ink); border-radius:999px;
+        text-shadow:0 1.5px 0 rgba(74,53,37,.45);
+        box-shadow:0 3px 0 var(--ink);
+        transition:transform .08s ease, box-shadow .08s ease;
+      }
+      #storyReturnBtn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--ink); }
+      #storyReturnBtn:focus-visible{ outline:3px solid var(--accent); outline-offset:2px; }
       #tray{
         flex:1 1 auto; min-width:0;
         display:flex; align-items:center; gap:7px;
@@ -1667,6 +1701,17 @@
 
       <!-- 下部操作パネル -->
       <section id="panel">
+        <!-- ストーリーに戻るバー：ペア／3匹特別ストーリーのセッションが
+             ドリンク待ちの間だけ表示され、タップ1回で読んでいた話の
+             トーク画面（ステップ位置そのまま）へ直接戻れる。
+             表示の更新は updateStoryReturnBar() が担当する -->
+        <div id="storyReturnBar" style="display:none">
+          <div class="srb-text">
+            <div id="storyReturnTitle">📖 特別ストーリーの途中です</div>
+            <div id="storyReturnSub"></div>
+          </div>
+          <button id="storyReturnBtn" type="button">📖 ストーリーに戻る</button>
+        </div>
         <div id="trayRow">
           <div id="tray">
             <div id="trayIcon"></div>
@@ -6442,6 +6487,7 @@
         $('makeBtn').textContent = '提供まち…';
       }
       updateOrderGlow();
+      updateStoryReturnBar(); /* トレイの変化に合わせて「ストーリーに戻る」バーを更新 */
     }
     function updateOrderGlow(){
       occupants.forEach(function(occ){
@@ -9849,6 +9895,7 @@
       pairView = null;
       $('pairOverlay').classList.remove('open');
       save();
+      updateStoryReturnBar(); /* ドリンク待ちで閉じたら、メイン画面に「戻る」バーを出す */
     }
     $('pairClose').addEventListener('click', closePair);
     $('pairOverlay').addEventListener('click', function(e){ if (e.target === this) closePair(); });
@@ -10006,6 +10053,7 @@
       ss.waiting = 'tap';
       renderPair();
       save();
+      updateStoryReturnBar(); /* 提供が済んだら「戻る」バーは役目を終える */
     }
     /* 2択ステップ：選んだ返事をマスターの発言として流し、2匹の返事へ */
     function pairChoose(i){
@@ -10038,6 +10086,71 @@
       renderPair();
       if (ep >= 7) toast('📚 ペアストーリー完結！', '『' + def.title + '』を最後まで読みました');
     }
+
+    /* ---------- ストーリーへ戻る導線（ドリンク待ちセッション） ----------
+       ペア物語／3匹特別ストーリーの「ドリンクを出す」ステップでは、
+       トーク画面を閉じてメイン画面で一杯を作る。その間、読んでいた
+       話へ戻るには本棚を開いて探し直す手間があったため、セッションが
+       ドリンク待ち（waiting==='drink'）の間はメイン画面の下部パネルに
+       「📖 ストーリーに戻る」バーを常時表示し、タップ1回でその話の
+       トーク画面へ（セッションのステップ位置そのまま）直接戻れる
+       ようにする。本棚から開き直す従来の導線はそのまま残る。
+       トレイに一杯できるとバーが目立つ表示に変わり、「ドリンクが
+       できました」の案内トーストも出す */
+    var storyReturnWasReady = false; /* 「できました」案内を出すための前回状態 */
+    function pendingStoryDrink(){
+      if (typeof state === 'undefined' || !state) return null;
+      if (typeof PAIR_STORIES !== 'undefined' && state.pairStories){
+        for (var i = 0; i < PAIR_STORIES.length; i++){
+          var pst = state.pairStories[PAIR_STORIES[i].id];
+          if (pst && pst.session && pst.session.waiting === 'drink'){
+            return { kind:'pair', id:PAIR_STORIES[i].id, def:PAIR_STORIES[i], ep:pst.session.ep };
+          }
+        }
+      }
+      if (typeof TRIO_STORIES !== 'undefined' && state.trioStories){
+        for (var j = 0; j < TRIO_STORIES.length; j++){
+          var tst = state.trioStories[TRIO_STORIES[j].id];
+          if (tst && tst.session && tst.session.waiting === 'drink'){
+            return { kind:'trio', id:TRIO_STORIES[j].id, def:TRIO_STORIES[j], ep:tst.session.ep };
+          }
+        }
+      }
+      return null;
+    }
+    function updateStoryReturnBar(){
+      var bar = $('storyReturnBar');
+      if (!bar) return;
+      var p = pendingStoryDrink();
+      if (!p){
+        bar.style.display = 'none';
+        bar.classList.remove('ready');
+        storyReturnWasReady = false;
+        return;
+      }
+      var ready = !!tray;
+      bar.style.display = 'flex';
+      bar.classList.toggle('ready', ready);
+      $('storyReturnTitle').textContent = ready ? '🍸 ドリンクができました！' : '📖 特別ストーリーの途中です';
+      $('storyReturnSub').textContent = ready
+        ? '「' + (tray.recipe ? tray.recipe.name : 'なぞの実験カクテル') + '」を持って『' + p.def.title + '』第' + p.ep + '話へ戻れます'
+        : '『' + p.def.title + '』第' + p.ep + '話がドリンク待ちです。作り終わったらここから戻れます';
+      /* 一杯が完成した瞬間だけ、迷わず戻れるよう案内を出す
+         （renderTray 経由で何度も呼ばれても、完成への遷移時に1回だけ） */
+      if (ready && !storyReturnWasReady){
+        toast('🍸 ドリンクができました！', '『' + p.def.title + '』が待っています。「📖 ストーリーに戻る」からどうぞ');
+      }
+      storyReturnWasReady = ready;
+    }
+    function returnToStory(){
+      var p = pendingStoryDrink();
+      if (!p){ updateStoryReturnBar(); return; }
+      /* セッションの話数で開き直すと、保存済みセッションがそのまま
+         使われ、ドリンク待ちのステップ位置から再開できる */
+      if (p.kind === 'pair') openPairStory(p.id, p.ep);
+      else openTrioStory(p.id, p.ep);
+    }
+    $('storyReturnBtn').addEventListener('click', returnToStory);
 
     /* ---------- VIP3匹特別ストーリー：購入・カード・再生 ----------
        ペア物語と作法をそろえる：記録は trioState()（owned／read／session）、
@@ -10238,6 +10351,7 @@
       $('pairAvas').classList.remove('trio');
       $('pairOverlay').classList.remove('open');
       save();
+      updateStoryReturnBar(); /* ドリンク待ちで閉じたら、メイン画面に「戻る」バーを出す */
     }
     function trioSteps(){
       var def = trioDef(trioView);
@@ -10381,6 +10495,7 @@
       ss.waiting = 'tap';
       renderTrio();
       save();
+      updateStoryReturnBar(); /* 提供が済んだら「戻る」バーは役目を終える */
     }
     function trioChoose(i){
       if (!trioView) return;
