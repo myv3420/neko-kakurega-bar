@@ -1226,6 +1226,16 @@
       }
       .pair-avas img:first-child{ left:0; }
       .pair-avas img:last-child{ right:0; }
+      /* 3匹目のアイコン（#pairAvaC）が加わったため、ペア再生時の
+         2匹目も left を明示する（従来は last-child の right:0 で配置） */
+      .pair-avas img:nth-child(2){ left:18px; }
+      /* 3匹特別ストーリー再生時：ヘッダーのアイコンを3匹分並べる */
+      .pair-avas.trio{ width:86px; }
+      .pair-avas.trio img:nth-child(1){ left:0; right:auto; }
+      .pair-avas.trio img:nth-child(2){ left:22px; right:auto; }
+      .pair-avas.trio img:nth-child(3){ left:44px; right:auto; }
+      #pairAvaC{ display:none; }
+      .pair-avas.trio #pairAvaC{ display:block; }
       #pairHeadText{ flex:1 1 auto; min-width:0; }
       #pairName{ font-size:15px; font-weight:800; line-height:1.25; }
       #pairEp{ font-size:11px; font-weight:700; color:#FFD9A0; line-height:1.3; }
@@ -1674,7 +1684,7 @@
       <div id="pairOverlay">
         <div id="pairBox" role="dialog" aria-modal="true" aria-label="VIPペア特別ストーリー">
           <div id="pairHead">
-            <div class="pair-avas"><img id="pairAvaA" alt="" /><img id="pairAvaB" alt="" /></div>
+            <div class="pair-avas" id="pairAvas"><img id="pairAvaA" alt="" /><img id="pairAvaB" alt="" /><img id="pairAvaC" alt="" /></div>
             <div id="pairHeadText">
               <div id="pairName"></div>
               <div id="pairEp"></div>
@@ -2340,6 +2350,7 @@
         inviteFirst: [],          // 招待直後の「初回確定来店」の予約（消費されるまで保持される catId）
         vipCall: null,            // お呼び出し招待状の予約（呼んだVIPの catId。来店が実現するまで保持され、同時に予約できるのは1件だけ）
         pairStories: {},          // VIPペア特別ストーリー { pairId: {owned, read, session} }（購入状態・読書進行）
+        trioStories: {},          // VIP3匹特別ストーリー { trioId: {owned, read, session} }（購入状態・読書進行）
         board: null,              // お店の掲示板 { requests, memos, storyNext, tweetsUsed, thanks, rot, postCount }（移行処理で初期化）
         helpSeen: false           // 遊び方モーダルを見たか（初回起動時の自動表示は1回だけ。閉じたときに true を保存する）
       };
@@ -2423,6 +2434,9 @@
       /* VIPペア特別ストーリーの移行：無いセーブには空の記録を与える。
          各ペアの詳細は pairState() が初回アクセス時に初期値で作る */
       if (!state.pairStories || typeof state.pairStories !== 'object') state.pairStories = {};
+      /* VIP3匹特別ストーリーの移行：無いセーブには空の記録を与える。
+         各組の詳細は trioState() が初回アクセス時に初期値で作る */
+      if (!state.trioStories || typeof state.trioStories !== 'object') state.trioStories = {};
       /* 今夜のテーマの移行：テーマが無い／不正な既存セーブには、その夜の
          テーマを抽選して割り当てる（互換維持。夜の途中では変わらない） */
       if (!themeById(state.theme)){ state.theme = drawTheme(); themeFreshDrawn = true; }
@@ -9299,6 +9313,245 @@
           ]
         ] }
     ];
+    /* ---------- VIP3匹特別ストーリー（BARの井戸端会議） ----------
+       VIP猫3匹がカウンターで語り合う、賑やかな特別ストーリー（各組・全5話）。
+       購入・閲覧はペア物語と共通の場所（思い出の本棚「特別なお話」タブと
+       ショップ「ストーリー」タブ）で、データは state.trioStories に保存する。
+       購入の前提は、対象の3匹が全員解放済みで、仲良し度が全員ハート5つ
+       （最大）なこと。価格は全組共通で 8,000コイン＋⭐120。
+       再生はペア物語と同じLINE風トークUI（#pairOverlay）を使い、話者は
+       'a'／'b'／'c' が def.cats の1〜3匹目に対応する。台本ステップの
+       形式はペア物語と同じ（'m'＝マスター、'n'＝ト書き、'd'＝ドリンク
+       提供、'q'＝マスターへの2択） */
+    var TRIO_STORIES = [
+      { id:'trio_kanroku', cats:['lion_s','tora_s','manu_s'], title:'貫禄トリオの甘い夜更かし', coins:8000, stars:120,
+        blurb:'百獣の王レオ、孤高の虎コテツ、隠居学者ゲン。見た目は渋くて貫禄たっぷりの3匹がカウンターに勢揃い。シリアスな会議かと思いきや、話題は「コテツの和菓子」「ゲンの好きな木の実の蜜」「レオの甘いミルクカクテル」のことばかり。ギャップ全開の癒やし回。',
+        eps:[
+          [ /* 第1話 */
+            ['n','ある夜、カウンターに3つの大きな影が並んだ'],
+            ['a','やあ、コテツ、ゲン。今夜は貫禄のある顔ぶれが揃ったな'],
+            ['b','……ああ。店の空気が、引き締まって見える'],
+            ['c','ふむ…まるで何かの会議のようじゃのう。重々しい雰囲気じゃ'],
+            ['a','はっはっは、では始めようじゃないか。今夜の議題は――'],
+            ['m','（なんだか、すごい会議が始まりそう…！）'],
+            ['c','議題は「今夜の甘いもの」じゃな？'],
+            ['a','その通りだ。さすがゲン、話が早い']
+          ],
+          [ /* 第2話 */
+            ['b','……では、まず俺から。和菓子の話をさせてもらう'],
+            ['b','新作の栗の和菓子だ。一口サイズで、餡の甘さは控えめに、栗の香りを立たせた'],
+            ['c','ふむ…試食係は、わしが務めようかのう'],
+            ['d','sweet',
+              [['b','……うまい。この甘さ、和菓子の引き立て役になる'],['a','はっはっは、甘い同士、相性がいいな'],['c','ふむ…甘さが、舌の上でほどけるのう']],
+              [['b','悪くない。だが今夜は、とびきり甘い一杯で語り合いたかった'],['a','マスター、次は甘いので頼む'],['c','ふむ、次は甘いのがええのう']]],
+            ['a','コテツの和菓子は絶品だ。俺も港で自慢しているんだぞ'],
+            ['b','……ふ。光栄だ']
+          ],
+          [ /* 第3話（2択） */
+            ['c','次は、わしの番じゃな。高地の木の実の蜜の話じゃ'],
+            ['c','岩場の花から採れる蜜でな、ほんのり花の香りがして、舐めると体が温まるんじゃ'],
+            ['a','木の実の蜜か…港では見かけないな'],
+            ['q','c','マスター、聞いてくれんかのう。木の実の蜜は、どう楽しむのが一番じゃと思う？',
+              '温かいお茶に溶かして、ゆっくりと',
+              [['c','ふむふむ、正解じゃ。蜜の香りは、温かさで開くんじゃよ'],['b','……和菓子にも、合いそうだな']],
+              'そのままひと舐め、素材の味をまっすぐに',
+              [['c','はっはっ、通な楽しみ方じゃな。素材の味は、正直じゃからのう'],['a','素材の味、か。甘党の真理だな']]],
+            ['b','……今度、その蜜を少し分けてくれ。和菓子に使ってみたい'],
+            ['c','ふむ、交換条件はコテツの和菓子じゃな']
+          ],
+          [ /* 第4話（ドリンク＝乾杯） */
+            ['n','話が弾んだところで、マスターが3匹に甘いミルクカクテルを運んできた'],
+            ['a','来たな、俺の大好物だ。この甘いミルクカクテルを飲むと、船乗りの疲れが吹き飛ぶ'],
+            ['b','……王様も、甘いものには勝てんか'],
+            ['a','はっはっは、勝てんでいいんだ。甘さは、正直で優しいからな'],
+            ['d','sweet',
+              [['a','うむ…！　とびきり甘い。これぞ、俺のミルクカクテルだ'],['b','……甘さの加減が、絶妙だ'],['c','ふむ…木の実の蜜にも、負けておらんのう']],
+              [['a','ふむ、悪くない。だが俺は、もう少しとびきり甘いのが好みでな'],['b','すまん、マスター。俺も同感だ'],['c','ふむ、次は甘いのを頼むぞ']]],
+            ['m','では3匹で、乾杯しましょう！　甘い夜に！'],
+            ['a','乾杯！'],
+            ['b','……乾杯'],
+            ['c','かんぱいじゃ']
+          ],
+          [ /* 第5話 */
+            ['n','夜も更けて、貫禄トリオのグラスが静かに鳴った'],
+            ['c','ふむ…渋い顔の3匹が、甘いものの話で夜更かしとはのう'],
+            ['b','……誰かに見られたら、笑われるかもしれん'],
+            ['a','はっはっは、笑えばいい。甘いもの好きに、貫禄も何もないさ'],
+            ['m','お3方の甘い話、私はずっと聞いていたいくらいです'],
+            ['b','……次は、俺の和菓子とゲンの蜜で、新作を作る。それを肴に、また集まろう'],
+            ['a','決まりだな。次回の「会議」も、このカウンターで'],
+            ['n','― 貫禄トリオの甘い夜更かし　おわり ―']
+          ]
+        ] },
+      { id:'trio_geijutsusai', cats:['bomb_s','sabi_s','cara_s'], title:'隠れ家BARの小さな芸術祭', coins:8000, stars:120,
+        blurb:'歌姫メリー、画家モネ、舞踏家カイル。表現者トリオが集結した夜。BARの壁に飾られたモネの絵を眺めながら、いつかこのBARで小さな夜会を開こうと夢を語り合う、華やかな回。',
+        eps:[
+          [ /* 第1話 */
+            ['n','ある夜、表現者3人がカウンターに集まった'],
+            ['a','あら、モネにカイル。今夜は芸術的な顔ぶれね'],
+            ['b','メリーさん、カイルさん。ぼくの絵、壁に飾ってもらってるんだ。…ほら、あそこ'],
+            ['c','左の壁の額縁ですね。『雨上がりの路地』…雨上がりの石畳に、灯りが映って、とても綺麗です'],
+            ['a','ふふ、画家と舞踏家と歌姫。隠れ家BARが、今夜は小さな劇場みたいね'],
+            ['m','お3人が揃うと、店の空気が華やぎますね'],
+            ['b','ねえ、3人で眺めようよ。ぼくの絵']
+          ],
+          [ /* 第2話 */
+            ['n','3人は並んで、壁の絵を静かに眺めた'],
+            ['c','この絵の前では、自然と背筋が伸びます。…踊りたくなるような、静けさですね'],
+            ['a','私は歌いたくなるわ。雨上がりの、澄んだ空気の歌を'],
+            ['d','sparkle',
+              [['b','わあ…星みたいにキラキラする味。絵の中の灯りみたいだ'],['a','ふふ、雨上がりの石畳の輝き、そのものね'],['c','優しい輝きだ。舞台の照明とは違う、休まる光ですね']],
+              [['b','ありがとう。…今夜は、絵の灯りのようにキラキラした一杯が似合う気がして'],['a','次はキラキラしたのでお願いね'],['c','すみません、次はきっと']]],
+            ['b','2人とも、ありがとう。絵はね、眺めてくれる人がいて、完成するんだ'],
+            ['a','あら、いい言葉。歌も踊りも、同じだわ']
+          ],
+          [ /* 第3話（2択） */
+            ['c','メリーさん、モネさん。提案があります'],
+            ['c','いつかこのBARで、小さな夜会を開きませんか。モネさんの絵の前で、メリーさんの歌に合わせて、僕が踊るんです'],
+            ['b','夜会…！　ぼくの絵が、舞台の背景になるの…？'],
+            ['q','a','マスター、どう思う？　隠れ家BARの小さな芸術祭、素敵だと思う？',
+              '素敵です。ぜひ、この店で開いてください',
+              [['a','ふふ、決まりね。マスター公認の芸術祭よ'],['c','ありがとうございます。では、計画を立てましょう'],['b','ぼく、新作を描くよ。夜会のための絵を！']],
+              'お客さんは常連さんだけ、秘密の夜会がいいです',
+              [['a','秘密の夜会…隠れ家らしくて、素敵だわ'],['b','うん、常連さんだけの、小さな特別な夜にしよう'],['c','限られたお客様の前で踊るのも、贅沢ですね']]],
+            ['a','プログラムは、3人で決めましょう。まず絵、次に歌、そして踊り…']
+          ],
+          [ /* 第4話（ドリンク） */
+            ['n','夜会の相談の合間、マスターが花の香りの一杯を3人に届けた'],
+            ['b','プログラムの最後は、3人一緒がいいな。絵の前で、歌と踊りが重なるの'],
+            ['c','僕のステップは、メリーさんの歌に寄り添うように。王子様の完璧さじゃなく、自由に踊りたいんです'],
+            ['d','floral',
+              [['a','まあ、花の香り…。夜会の幕開けに、ぴったりだわ'],['b','ふわっと花の香り…。絵の具に、この香りを混ぜたくなる'],['c','花の香りだ…今の旋律の余韻に、そのまま溶けていく']],
+              [['a','ありがとう。…今夜は、花の香りで夜会の夢を膨らませたかったの'],['b','うん、でも美味しいよ。ありがとう'],['c','すみません、次は花の香りでお願いします']]],
+            ['a','カイルの自由な踊り、私の歌も自由にしてくれそう'],
+            ['m','（小さな芸術祭、絶対に素敵な夜になる…）']
+          ],
+          [ /* 第5話 */
+            ['n','夜も更けて、3人は絵の前で静かにグラスを掲げた'],
+            ['b','約束だよ。夜会の日まで、ぼくは新作を描き続ける'],
+            ['c','僕は、新しい振付を用意します。最初に披露するのは、この店です'],
+            ['a','私は、その夜のための歌を練習しておくわ。…マスター、乾杯の音頭を取って'],
+            ['m','では…隠れ家BARの小さな芸術祭に、乾杯！'],
+            ['a','乾杯♪'],
+            ['b','かんぱーい！'],
+            ['c','乾杯'],
+            ['n','― 隠れ家BARの小さな芸術祭　おわり ―']
+          ]
+        ] },
+      { id:'trio_tabibito', cats:['main_l','scot_s','chee_s'], title:'海と空と風の旅人会議', coins:8000, stars:120,
+        blurb:'海を行く船長カイ、世界中を巡る旅猫紳士オリバー、街を駆ける俊足の配達員ラピッド。「旅と移動のプロ」3匹が、それぞれの見てきた美しい景色と、「帰ってきたくなる場所」について語り合う、爽やかな回。',
+        eps:[
+          [ /* 第1話 */
+            ['n','ある夜、旅のプロ3人がカウンターに顔を合わせた'],
+            ['a','オリバーさん、ラピッドさん。今夜は「旅人会議」ですね'],
+            ['b','やあ、カイ船長。海の男と、陸の風と、旅の紳士。いい顔ぶれだね'],
+            ['c','ぼくは街の中の旅人だけどね！　でも、運ぶプロ同士、話は合うはずだよ'],
+            ['a','議題は「今まで見た、一番美しい景色」です'],
+            ['m','お3人の景色自慢、楽しみにしています'],
+            ['c','よーし、ぼくから言っちゃおうかな！']
+          ],
+          [ /* 第2話 */
+            ['a','まずは僕から。嵐のあとの海です。雲が割れて、夕日が海一面を金色に染めるんです'],
+            ['b','嵐のあとの海か…。船乗りだけが見られる、ご褒美の景色だね'],
+            ['d','fresh',
+              [['c','すっきりー！　海の風みたいな味だ！'],['a','爽やかな味ですね。甲板の風を思い出します'],['b','うん、澄んだ味だ。旅の疲れが抜けていくよ']],
+              [['c','ありがとう！　…旅の話には、すっきり爽やかな一杯で気合を入れたかったな'],['a','すみません、次は爽やかな一杯をお願いします'],['b','マスター、次は爽やかなので頼むよ']]],
+            ['c','ぼくはね、配達の途中で見る朝の街が好きだよ。パン屋さんの煙と、始発の音と、まだ静かな通り'],
+            ['b','速く走る君が、朝の静けさを覚えているとはね']
+          ],
+          [ /* 第3話（2択） */
+            ['b','僕の番だね。一番美しい景色は、海の向こうの山岳地帯で見た、青い星のような花の谷だよ'],
+            ['a','花の谷…！　海図には載らない景色ですね'],
+            ['c','ぼくも見てみたいなあ。走って行ける距離かな？'],
+            ['q','b','マスターに聞きたいな。旅の景色は、写真と心、どちらに残すのがいいと思う？',
+              '心です。景色は、感じた気持ちごと宝物です',
+              [['b','その通りだね。心に残した景色は、色褪せないんだ'],['a','僕も、嵐のあとの海は、心の中にあります'],['c','ぼくの朝の街も、心の中だなあ']],
+              '写真です。誰かと分かち合えますから',
+              [['b','分かち合う、か。いい考えだ。旅の記録は、誰かと結びついて生きるからね'],['c','じゃあぼく、今度の配達で写真を撮ってこようかな'],['a','帰港したら、僕にも見せてください']]],
+            ['b','旅の話は尽きないね。…でも、もうひとつ大事な議題がある']
+          ],
+          [ /* 第4話（ドリンク） */
+            ['n','マスターが温かい一杯を3人に届けると、会議は最後の議題に入った'],
+            ['a','最後の議題は、「帰ってきたくなる場所」ですね'],
+            ['b','僕にとっては、旅の記録を分かち合える場所かな。…この店も、そのひとつだよ'],
+            ['d','warm',
+              [['a','温かい…。長い航海のあとの、港の灯りみたいです'],['b','ほっとする味だ。故郷の夕日を思い出すなあ'],['c','温かい…！　走り回った体に、しみる〜']],
+              [['a','ありがとうございます。…帰りたくなる場所の話には、温かくまろやかな一杯が似合いますね'],['b','ふむ、次は温かいのを頼むよ'],['c','次は温かいのでお願い！']]],
+            ['c','ぼくにとっては、配達のあとに「おかえり」って言ってもらえる場所！　…それって、ここのことかも'],
+            ['m','（お3人とも、この店を「帰る場所」にしてくれてるんだ…）']
+          ],
+          [ /* 第5話 */
+            ['n','夜も更けて、旅人会議はお開きの時間になった'],
+            ['a','決めましょう。今夜の会議の結論を'],
+            ['b','「美しい景色は、帰る場所があるからこそ、輝く」。どうかな'],
+            ['c','いいね！　ぼくたちは、帰る場所のために走ってるんだ！'],
+            ['m','では、その結論に乾杯しましょう！'],
+            ['a','乾杯！　海と空と風の旅人に！'],
+            ['b','乾杯'],
+            ['c','かんぱーい！'],
+            ['n','― 海と空と風の旅人会議　おわり ―']
+          ]
+        ] },
+      { id:'trio_tea', cats:['pers_l','abys_s','serv_s'], title:'夜風と香りのティータイム', coins:8000, stars:120,
+        blurb:'耳の良いサーバル・ソラが聞きつけた「夜の草花のささやき」をヒントに、調香師ローレルが新しい香りを調合し、お嬢様セシルが感想を伝える。穏やかで可愛らしい、お茶会ムードの回。',
+        eps:[
+          [ /* 第1話 */
+            ['n','ある夜、カウンターで小さなお茶会が始まった'],
+            ['a','まあ、今夜はお茶会の顔ぶれですわね。ローレルさん、ソラさん'],
+            ['b','ええ、セシル様。香りのお話には、ぴったりの夜です'],
+            ['c','わぁ、なんだかワクワクします！　私の耳も、今夜はよく澄んでますよ'],
+            ['a','ふふ。お屋敷のお茶会とは違う、隠れ家のお茶会。素敵ですわ'],
+            ['m','お3方、今夜はゆっくりお茶会をどうぞ'],
+            ['c','あっ…！　今、聞こえました。窓の外、夜の草花のささやき…！']
+          ],
+          [ /* 第2話 */
+            ['c','草花がね、「今夜は、露の香りを届けたいな」って、ささやいてるんです'],
+            ['b','露の香り…！　ソラさん、それ、素晴らしいヒントです'],
+            ['a','まあ…草花の声が聞こえるなんて、ソラさんは素敵な耳をお持ちですわね'],
+            ['d','fresh',
+              [['c','すっきりー！　頭の中の風が、すっと抜けたみたい'],['b','すっきりして、澄んだ味…。露の香りのイメージが、膨らみます'],['a','澄んだ味ですわ…。夜の庭の空気みたい']],
+              [['c','ありがとうございます。…今夜は、すっきり爽やかな一杯で耳を澄ませたかったな'],['b','ありがとうございます。…調合の前には、澄んだ一杯で感性を研ぎ澄ましたかったのですが'],['a','そうですわね…まず、澄んだ一杯で気持ちを整えたかったですわ']]],
+            ['b','今夜、その「夜の草花のささやき」を香りにしてみましょう'],
+            ['c','わぁ…！　私の耳が、香りになるんですね']
+          ],
+          [ /* 第3話（2択） */
+            ['n','ローレルは小さな瓶を並べ、静かに調合を始めた'],
+            ['b','基調は、夜露の澄んだ香り。そこに、月下で咲く花の甘さをひとしずく…'],
+            ['a','瓶の中に、夜の庭が広がっていくようですわ'],
+            ['q','b','マスター、仕上げの香りはどちらがいいと思います？　夜風の爽やかさか、草花の優しい甘さか',
+              '夜風の爽やかさです',
+              [['b','では、最後に夜風の香りをひと吹き。…澄んだ仕上がりになりました'],['c','わぁ、風の音まで聞こえてきそうです'],['a','爽やかで、上品ですわ']],
+              '草花の優しい甘さです',
+              [['b','では、草花の甘さをもうひとしずく。…優しい仕上がりになりました'],['a','まあ…包み込むような甘さ。お茶会にぴったりですわ'],['c','草花たちも、喜んでる声がします']]],
+            ['b','さあ、完成です。名前は…「夜風のささやき」']
+          ],
+          [ /* 第4話（ドリンク） */
+            ['n','試香の前に、マスターが花の香りの一杯を3人に届けた'],
+            ['a','では、私が最初の感想を述べますわね'],
+            ['a','（香りをかいで）…まあ…！　夜の庭を、そっと歩いているような香りですわ'],
+            ['d','floral',
+              [['b','ふわっと花の香り…。この香りのイメージに、ぴったりです'],['a','素敵な香り…。こんな香水があったら、毎日つけますわ'],['c','わあ…花の香り！　草花のささやき、そのままです']],
+              [['b','ありがとうございます。…試香には、花の香りのする一杯で感性を研ぎ澄ましたかったのですが'],['a','まあ、残念。香りのお話には、花の一杯が似合いますのに'],['c','次は花の香りでお願いします！']]],
+            ['c','私の聞いた「ささやき」が、本当に香りになりました…！'],
+            ['b','ソラさんの耳と、セシル様の言葉があってこその香りです']
+          ],
+          [ /* 第5話 */
+            ['n','夜も更けて、お茶会は穏やかな終わりの時間を迎えた'],
+            ['a','ローレルさん、ソラさん。今夜は本当にありがとう'],
+            ['a','この香りは、私たちのティータイムの思い出にしますわ'],
+            ['c','草花たちにも、伝えておきますね。「香りになったよ」って'],
+            ['m','では、お茶会の締めに乾杯しましょう'],
+            ['a','乾杯ですわ♪'],
+            ['b','乾杯'],
+            ['c','かんぱーい！'],
+            ['n','― 夜風と香りのティータイム　おわり ―']
+          ]
+        ] }
+    ];
+    function trioDef(id){
+      for (var i = 0; i < TRIO_STORIES.length; i++) if (TRIO_STORIES[i].id === id) return TRIO_STORIES[i];
+      return null;
+    }
     function pairDef(id){
       for (var i = 0; i < PAIR_STORIES.length; i++) if (PAIR_STORIES[i].id === id) return PAIR_STORIES[i];
       return null;
@@ -9447,8 +9700,11 @@
       }
       pairView = pairId;
       pairEnd = null;
+      trioView = null;
+      trioEnd = null;
       closeModal();
       var ca = catById(def.a), cb = catById(def.b);
+      $('pairAvas').classList.remove('trio');
       $('pairAvaA').src = ca.frame1;
       $('pairAvaB').src = cb.frame1;
       $('pairName').textContent = ca.fixedName + ' × ' + cb.fixedName;
@@ -9457,6 +9713,9 @@
       if (pst.session.waiting === 'tap') pairProcess();
     }
     function closePair(){
+      /* 3匹特別ストーリーの再生中は、そちらの終了処理へ回す
+         （同じ #pairOverlay を共有しているため） */
+      if (trioView){ closeTrio(); return; }
       /* 最後まで読み終えた状態（waiting='end'）で閉じた場合も、その話は
          「読み終わった」ものとして完了させる（連続相談と同じ作法） */
       if (pairView){
@@ -9471,6 +9730,11 @@
     $('pairClose').addEventListener('click', closePair);
     $('pairOverlay').addEventListener('click', function(e){ if (e.target === this) closePair(); });
     $('pairLog').addEventListener('click', function(){
+      if (trioView){
+        var tss = trioState(trioView).session;
+        if (tss && tss.waiting === 'tap') trioProcess();
+        return;
+      }
       if (!pairView) return;
       var ss = pairState(pairView).session;
       if (ss && ss.waiting === 'tap') pairProcess();
@@ -9652,6 +9916,333 @@
       if (ep >= 7) toast('📚 ペアストーリー完結！', '『' + def.title + '』を最後まで読みました');
     }
 
+    /* ---------- VIP3匹特別ストーリー：購入・カード・再生 ----------
+       ペア物語と作法をそろえる：記録は trioState()（owned／read／session）、
+       カードは本棚とショップで共通（trioCardHtml）、再生はペアと同じ
+       #pairOverlay のLINE風トークUIで、話者 'a'／'b'／'c' を3匹に割り当てる */
+    function trioState(id){
+      if (!state.trioStories || typeof state.trioStories !== 'object') state.trioStories = {};
+      var tst = state.trioStories[id];
+      if (!tst || typeof tst !== 'object'){
+        tst = { owned:false, read:0, session:null };
+        state.trioStories[id] = tst;
+      }
+      if (typeof tst.owned !== 'boolean') tst.owned = false;
+      if (typeof tst.read !== 'number' || tst.read < 0) tst.read = 0;
+      if (tst.session === undefined) tst.session = null;
+      return tst;
+    }
+    /* 購入の前提条件チェック：対象3匹全員の解放状態と仲良し度
+       （ハート5つ＝最大）を判定し、足りない条件を理由の文で返す
+       （空配列なら購入できる）。ペア物語の pairUnlockMsgs と同じ作法 */
+    function trioUnlockMsgs(def){
+      var msgs = [];
+      def.cats.forEach(function(cid){
+        var c = catById(cid);
+        if (!c) return;
+        if (c.inviteOnly){
+          if (state.invited.indexOf(cid) === -1) msgs.push(c.fixedName + 'はまだ招待していません（ショップの「招待」タブから招待状を送れます）');
+        } else if (!isVipNightUnlocked(c)){
+          msgs.push(c.fixedName + 'は第' + c.unlockNight + '夜で解放されます');
+        }
+        var h = pairFavHearts(cid);
+        if (h < 5) msgs.push(c.fixedName + 'の仲良し度がハート5つに届いていません（いま ' + hearts(h) + '）');
+      });
+      return msgs;
+    }
+    var trioConfirm = null;
+    function buyTrioStory(id){
+      var def = trioDef(id);
+      if (!def) return;
+      var tst = trioState(id);
+      if (tst.owned) return;
+      if (trioUnlockMsgs(def).length) return;
+      if (state.coins < def.coins || state.stars < def.stars) return;
+      state.coins -= def.coins;
+      state.stars -= def.stars;
+      tst.owned = true;
+      trioConfirm = null;
+      save(); renderStatus(); renderModalBody();
+      toast('🍸 3匹特別ストーリーを解放しました！', '『' + def.title + '』（全' + def.eps.length + '話）が読めるようになりました');
+    }
+    /* 3匹特別ストーリーのカードHTML（思い出の本棚モーダルとショップの
+       「ストーリー」タブで共通。購入・閲覧のデータも共通） */
+    function trioCardHtml(def){
+      var cats = def.cats.map(function(cid){ return catById(cid); });
+      if (cats.some(function(c){ return !c; })) return '';
+      var tst = trioState(def.id);
+      var epTotal = def.eps.length;
+      var html = '<div class="pair-card">' +
+        '<div class="pair-head">' + cats.map(function(c, i){
+          return '<img class="pair-ava' + (i > 0 ? ' pair-ava-b' : '') + (pairCatLocked(c) ? ' locked' : '') + '" src="' + c.frame1 + '" alt="">';
+        }).join('') +
+        '<div class="pair-titles"><div class="pair-names">👑 ' + cats.map(function(c){ return c.fixedName; }).join(' × ') + '</div>' +
+        '<div class="pair-story-title">『' + def.title + '』（全' + epTotal + '話）</div></div></div>' +
+        '<p class="pair-blurb">' + def.blurb + '</p>';
+      if (tst.owned){
+        html += '<div class="pair-status">' + (tst.read >= epTotal ? '📖 全' + epTotal + '話 完結！　読み返せます' : '📖 第' + tst.read + '話まで読了') + '</div>' +
+          '<div class="reread-row">';
+        for (var ep = 1; ep <= epTotal; ep++){
+          var can = ep <= tst.read + 1;
+          var mid = tst.session && tst.session.ep === ep && ep === tst.read + 1;
+          html += '<button class="reread-btn" data-trio-read="' + def.id + ':' + ep + '" type="button"' + (can ? '' : ' disabled') + '>第' + ep + '話' + (ep <= tst.read ? ' ✓' : (mid ? '（途中）' : '')) + '</button>';
+        }
+        html += '</div>';
+      } else {
+        var msgs = trioUnlockMsgs(def);
+        html += '<div class="pair-status">価格：' + def.coins + 'コイン ＋ ⭐' + def.stars + '</div>' +
+          '<div class="pair-hearts">' + cats.map(function(c, i){
+            return c.fixedName + 'の仲良し度 ' + hearts(pairFavHearts(def.cats[i]));
+          }).join(' ／ ') + '（購入には全員ハート5つ）</div>';
+        if (msgs.length){
+          html += '<div class="pair-locked">' + msgs.map(function(m){ return '・' + m; }).join('<br>') + '</div>' +
+            '<div class="pair-act-row"><button class="buy-btn" disabled>🔒 まだ購入できません</button></div>';
+        } else if (state.coins < def.coins || state.stars < def.stars){
+          var lack = [];
+          if (state.coins < def.coins) lack.push('コインがあと ' + (def.coins - state.coins));
+          if (state.stars < def.stars) lack.push('⭐があと ' + (def.stars - state.stars));
+          html += '<div class="pair-act-row"><button class="buy-btn" disabled>🍸 購入する <span class="price">' + def.coins + 'コイン＋⭐' + def.stars + '</span><br>' + lack.join('／') + '足りません</button></div>';
+        } else {
+          html += '<div class="pair-act-row"><button class="buy-btn" data-trio-buy="' + def.id + '" type="button">🍸 購入する <span class="price">' + def.coins + 'コイン＋⭐' + def.stars + '</span></button></div>';
+        }
+        if (trioConfirm === def.id && !msgs.length){
+          html += '<div class="invite-confirm">『' + def.title + '』を購入しますか？<br>' +
+            def.coins + 'コインと⭐' + def.stars + 'を使って、この3匹の特別ストーリー（全' + epTotal + '話）が読めるようになります。' +
+            '<div class="ic-btns">' +
+            '<button class="buy-btn" data-trio-buy-send="' + def.id + '" type="button">🍸 購入する</button>' +
+            '<button class="buy-btn" data-trio-buy-cancel="1" type="button">やめる</button>' +
+            '</div></div>';
+        }
+      }
+      html += '</div>';
+      return html;
+    }
+    /* 本棚／ショップ共通の「3匹の特別回」セクション（見出し＋説明＋全カード） */
+    function trioSectionHtml(){
+      var h = '<div class="invite-sec-title">🍸 3匹の特別回（BARの井戸端会議）</div>' +
+        '<p class="invite-note">VIP猫3匹がカウンターで語り合う、賑やかな特別ストーリー（各組・全5話）です。対象の3匹が全員解放済みで、仲良し度が全員ハート5つ（最大）のとき、8,000コイン＋⭐120で購入できます。</p>';
+      TRIO_STORIES.forEach(function(def){ h += trioCardHtml(def); });
+      return h;
+    }
+    function wireTrioCards(root){
+      root.querySelectorAll('[data-trio-buy]').forEach(function(b){
+        b.addEventListener('click', function(){ trioConfirm = b.getAttribute('data-trio-buy'); renderModalBody(); });
+      });
+      var cancelBtn = root.querySelector('[data-trio-buy-cancel]');
+      if (cancelBtn) cancelBtn.addEventListener('click', function(){ trioConfirm = null; renderModalBody(); });
+      root.querySelectorAll('[data-trio-buy-send]').forEach(function(b){
+        b.addEventListener('click', function(){ buyTrioStory(b.getAttribute('data-trio-buy-send')); });
+      });
+      root.querySelectorAll('[data-trio-read]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var parts = b.getAttribute('data-trio-read').split(':');
+          openTrioStory(parts[0], parseInt(parts[1], 10));
+        });
+      });
+    }
+    /* ---------- 3匹特別ストーリーの再生（ペアと同じLINE風トークUI） ---------- */
+    var trioView = null;  /* 再生中の3匹ストーリーID */
+    var trioEnd = null;   /* 読了直後の完了画面用 {trioId, ep, log} */
+    function openTrioStory(trioId, ep){
+      var def = trioDef(trioId);
+      if (!def) return;
+      var tst = trioState(trioId);
+      if (!tst.owned || ep < 1 || ep > def.eps.length || ep > tst.read + 1) return;
+      if (!tst.session || tst.session.ep !== ep){
+        tst.session = { ep: ep, idx: 0, log: [], waiting: 'tap', qShown: false };
+        save();
+      }
+      trioView = trioId;
+      trioEnd = null;
+      pairView = null;
+      pairEnd = null;
+      closeModal();
+      var cats = def.cats.map(function(cid){ return catById(cid); });
+      $('pairAvaA').src = cats[0].frame1;
+      $('pairAvaB').src = cats[1].frame1;
+      $('pairAvaC').src = cats[2].frame1;
+      $('pairAvas').classList.add('trio');
+      $('pairName').textContent = cats.map(function(c){ return c.fixedName; }).join(' × ');
+      $('pairOverlay').classList.add('open');
+      renderTrio();
+      if (tst.session.waiting === 'tap') trioProcess();
+    }
+    function closeTrio(){
+      if (trioView){
+        var tst = trioState(trioView);
+        if (tst.session && tst.session.waiting === 'end') finishTrioEpisode();
+      }
+      trioEnd = null;
+      trioView = null;
+      $('pairAvas').classList.remove('trio');
+      $('pairOverlay').classList.remove('open');
+      save();
+    }
+    function trioSteps(){
+      var def = trioDef(trioView);
+      var tst = trioState(trioView);
+      if (!def || !tst.session) return null;
+      return def.eps[tst.session.ep - 1] || null;
+    }
+    function trioProcess(){
+      if (!trioView) return;
+      var tst = trioState(trioView);
+      var ss = tst.session;
+      if (!ss) return;
+      var steps = trioSteps();
+      if (!steps || ss.idx >= steps.length){ ss.waiting = 'end'; renderTrio(); save(); return; }
+      var step = steps[ss.idx];
+      var k = step[0];
+      if (k === 'a' || k === 'b' || k === 'c' || k === 'm' || k === 'n'){
+        ss.log.push({ w: k, t: step[1] });
+        ss.idx++;
+        ss.waiting = 'tap';
+      } else if (k === 'd'){
+        ss.waiting = 'drink';
+      } else if (k === 'q'){
+        if (!ss.qShown){ ss.log.push({ w: step[1], t: step[2] }); ss.qShown = true; }
+        ss.waiting = 'choice';
+      }
+      renderTrio();
+      save();
+    }
+    function renderTrio(){
+      if (!trioView) return;
+      var def = trioDef(trioView);
+      var cats = def.cats.map(function(cid){ return catById(cid); });
+      var tst = trioState(trioView);
+      var ss = tst.session;
+      var endView = !ss && trioEnd && trioEnd.trioId === trioView;
+      var log = endView ? trioEnd.log : (ss ? ss.log : []);
+      var epNow = ss ? ss.ep : (endView ? trioEnd.ep : 1);
+      var epText = '🍸 3匹特別ストーリー 第' + epNow + '話 ／ 『' + def.title + '』';
+      var headW = $('pairHeadText').clientWidth;
+      $('pairEp').innerHTML = headW > 40
+        ? talkTextHtml(epText, headW - 2, '11px', '700')
+        : escChatHtml(epText);
+      var logEl = $('pairLog');
+      var rowW = logEl.clientWidth - 20;
+      var bubMaxPx = Math.round(rowW > 40 ? rowW * 0.76 : 250);
+      var bubCap = bubMaxPx - 30;
+      logEl.innerHTML = log.map(function(en){
+        if (en.w === 'n') return '<div class="rr-note">' + escChatHtml(en.t) + '</div>';
+        var html = talkTextHtml(en.t, bubCap, '13.5px', '700');
+        if (en.w === 'm') return '<div class="tk-row me"><div class="tk-bub me" style="max-width:' + bubMaxPx + 'px">' + html + '</div></div>';
+        var cat = cats['abc'.indexOf(en.w)] || cats[0];
+        return '<div class="tk-row"><img class="tk-ava" src="' + cat.frame1 + '" alt=""><div class="tk-col"><div class="tk-name">' + escChatHtml(cat.fixedName) + '</div><div class="tk-bub" style="max-width:' + bubMaxPx + 'px">' + html + '</div></div></div>';
+      }).join('') + (endView ? '<div class="rr-note">― 第' + epNow + '話 おわり ―</div>' : '');
+      var act = $('pairActions');
+      var hint = $('pairHint');
+      act.innerHTML = '';
+      if (endView){
+        hint.textContent = '';
+        if (trioEnd.ep < def.eps.length){
+          var nb = document.createElement('button');
+          nb.className = 'talk-act primary'; nb.type = 'button';
+          nb.textContent = '次の話を読む（第' + (trioEnd.ep + 1) + '話）';
+          nb.addEventListener('click', function(){ var tid = trioEnd.trioId, nep = trioEnd.ep + 1; trioEnd = null; openTrioStory(tid, nep); });
+          act.appendChild(nb);
+        } else {
+          var doneNote = document.createElement('div');
+          doneNote.className = 'talk-note';
+          doneNote.textContent = '🍸 『' + def.title + '』完結！ 本棚からいつでも読み返せます';
+          act.appendChild(doneNote);
+        }
+        var cbBtn = document.createElement('button');
+        cbBtn.className = 'talk-act'; cbBtn.type = 'button';
+        cbBtn.textContent = '閉じる';
+        cbBtn.addEventListener('click', closePair);
+        act.appendChild(cbBtn);
+      } else if (ss){
+        var steps = trioSteps();
+        var step = steps && steps[ss.idx];
+        if (ss.waiting === 'drink' && step){
+          hint.textContent = '';
+          var note = document.createElement('div');
+          note.className = 'talk-note';
+          note.textContent = '3匹に一杯どうぞ（合いそうな味：' + (TASTE_LABELS[step[1]] || '') + '）';
+          act.appendChild(note);
+          if (tray){
+            var sb = document.createElement('button');
+            sb.className = 'talk-act primary'; sb.type = 'button';
+            sb.textContent = '🍸 「' + (tray.recipe ? tray.recipe.name : 'なぞの実験カクテル') + '」を出す';
+            sb.addEventListener('click', trioServe);
+            act.appendChild(sb);
+          } else {
+            var mb = document.createElement('button');
+            mb.className = 'talk-act'; mb.type = 'button';
+            mb.textContent = '作りに行く（この画面を閉じる）';
+            mb.addEventListener('click', closePair);
+            act.appendChild(mb);
+          }
+        } else if (ss.waiting === 'choice' && step){
+          hint.textContent = 'どう答える？';
+          var choiceCap = (act.clientWidth > 40 ? act.clientWidth : 360) - 52;
+          [0, 1].forEach(function(i){
+            var chb = document.createElement('button');
+            chb.className = 'talk-act choice'; chb.type = 'button';
+            chb.innerHTML = talkTextHtml(step[3 + i * 2], choiceCap, '14px', '800');
+            chb.addEventListener('click', function(){ trioChoose(i); });
+            act.appendChild(chb);
+          });
+        } else if (ss.waiting === 'end'){
+          hint.textContent = '';
+          var eb = document.createElement('button');
+          eb.className = 'talk-act primary'; eb.type = 'button';
+          eb.textContent = 'この話をおわる';
+          eb.addEventListener('click', finishTrioEpisode);
+          act.appendChild(eb);
+        } else {
+          hint.textContent = '▼ タップで進む';
+        }
+      }
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    function trioServe(){
+      if (!trioView || !tray) return;
+      var tst = trioState(trioView);
+      var ss = tst.session;
+      if (!ss || ss.waiting !== 'drink') return;
+      var step = trioSteps()[ss.idx];
+      var drink = tray; tray = null; renderTray();
+      playGlassSound();
+      var matched = drinkTasteKeys(drink.combo).indexOf(step[1]) !== -1;
+      ss.log.push({ w: 'n', t: '（' + (drink.recipe ? drink.recipe.name : 'なぞの実験カクテル') + 'を3匹に出した）' });
+      (matched ? step[2] : step[3]).forEach(function(L){ ss.log.push({ w: L[0], t: L[1] }); });
+      ss.idx++;
+      ss.waiting = 'tap';
+      renderTrio();
+      save();
+    }
+    function trioChoose(i){
+      if (!trioView) return;
+      var tst = trioState(trioView);
+      var ss = tst.session;
+      if (!ss || ss.waiting !== 'choice') return;
+      var step = trioSteps()[ss.idx];
+      ss.log.push({ w: 'm', t: step[3 + i * 2] });
+      step[4 + i * 2].forEach(function(L){ ss.log.push({ w: L[0], t: L[1] }); });
+      ss.qShown = false;
+      ss.idx++;
+      ss.waiting = 'tap';
+      renderTrio();
+      save();
+    }
+    function finishTrioEpisode(){
+      if (!trioView) return;
+      var def = trioDef(trioView);
+      var tst = trioState(trioView);
+      var ss = tst.session;
+      if (!ss) return;
+      var ep = ss.ep;
+      if (ep === tst.read + 1) tst.read = ep;
+      trioEnd = { trioId: trioView, ep: ep, log: ss.log };
+      tst.session = null;
+      saveNow();
+      renderTrio();
+      if (ep >= def.eps.length) toast('🍸 3匹特別ストーリー完結！', '『' + def.title + '』を最後まで読みました');
+    }
+
     /* ---------- 特別招待（ネコ科VIP解放） ----------
        ショップタブの【特別招待】セクションから、コインで招待状を送る。
        解放は段階制：ゲン→レオ→シルバ→ラピッド→コテツ→カイル→ソラの順に、前の1匹を
@@ -9792,7 +10383,7 @@
          初回起動時の自動表示は1回だけになり、次回以降は開かない。
          🔔からの手動表示はいつでも可能（この処理は表示自体には影響しない） */
       if (currentModal === 'help' && state && !state.helpSeen){ state.helpSeen = true; saveNow(); }
-      closeZukanPop(); $('modalOverlay').classList.remove('open'); currentModal = null; inviteConfirm = null; pairConfirm = null; callConfirm = null;
+      closeZukanPop(); $('modalOverlay').classList.remove('open'); currentModal = null; inviteConfirm = null; pairConfirm = null; trioConfirm = null; callConfirm = null;
     }
     $('modalClose').addEventListener('click', closeModal);
     /* カウンター右端の掲示板小物タップで掲示板モーダルを開く */
@@ -10262,6 +10853,7 @@
           /* 特別なお話タブ：VIPペア特別ストーリー（従来の本棚の内容） */
           htmlBk += '<p class="modal-note">コイン： ' + state.coins + ' ／ 星⭐： ' + state.stars + ' ／ VIP猫同士の特別な物語が並ぶ、本棚です。対象の2匹が解放済みで、仲良し度が両方ともハート3つ以上になると、コインと⭐で購入できます。</p>';
           PAIR_STORIES.forEach(function(def){ htmlBk += pairCardHtml(def); });
+          htmlBk += trioSectionHtml();
         }
         body.innerHTML = htmlBk;
         /* 本棚内タブの切り替え（常連猫／VIP猫／特別なお話） */
@@ -10275,7 +10867,7 @@
         });
         if (shelfTab === 'regular') wireMemoRereadButtons(body);
         if (shelfTab === 'vip') wireRereadButtons(body);
-        if (shelfTab === 'pair') wirePairCards(body);
+        if (shelfTab === 'pair'){ wirePairCards(body); wireTrioCards(body); }
         if (shelfTab === 'neighbor') wireShopStoryButtons(body);
       }
       if (currentModal === 'shop'){
@@ -10390,6 +10982,7 @@
         if (shopTab === 'story'){
           html4 += '<p class="invite-note">VIP猫同士の掛け合いが描かれる「ペア特別ストーリー」（各組・全7話）です。対象の2匹が解放済みで、仲良し度が両方ともハート3つ以上になると購入できます。壁の飾り棚「思い出の本棚」からも、同じ物語を購入・閲覧できます。</p>';
           PAIR_STORIES.forEach(function(def){ html4 += pairCardHtml(def); });
+          html4 += trioSectionHtml();
         }
         body.innerHTML = html4;
         /* ショップ内タブの切り替え（招待／レシピ／ストーリー） */
@@ -10404,6 +10997,7 @@
         });
         /* ストーリータブの購入・閲覧ボタン（本棚モーダルと共通の配線） */
         wirePairCards(body);
+        wireTrioCards(body);
         /* 特別招待：1回目のタップで確認ステップを表示し、確認行の
            「送る」でもう一度タップして初めてコインを消費する */
         body.querySelectorAll('[data-invite]').forEach(function(b){
