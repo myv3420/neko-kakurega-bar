@@ -640,6 +640,35 @@
       }
       #toast.show{ opacity:1; transform:translate(-50%,0); }
       #toast .t-sub{ display:block; font-size:11px; color:#FFD9A0; font-weight:700; }
+      /* 在庫不足ポップ：レシピ／手動調合で材料が足りない時に出す専用の
+         お知らせカード。モーダル（z-index:50）や各種オーバーレイより
+         前面（z-index:95）に出し、不足している材料名を1行ずつ
+         「〇〇の在庫がありません」とまとめて並べる。背景タップ／
+         「とじる」ボタン／約4.5秒の自動消去で閉じる */
+      #stockAlert{
+        position:absolute; inset:0; z-index:95;
+        display:flex; align-items:center; justify-content:center;
+        background:rgba(30,19,10,.45); padding:20px;
+      }
+      #stockAlert .sa-card{
+        width:min(320px,100%); background:var(--cream);
+        border:3px solid #C7432B; border-radius:16px;
+        padding:16px 16px 13px; text-align:center;
+        box-shadow:0 8px 24px rgba(0,0,0,.4);
+      }
+      #stockAlert.show .sa-card{ animation:stockPop .25s cubic-bezier(.34,1.4,.64,1) both; }
+      @keyframes stockPop{ from{ transform:scale(.85); opacity:0; } }
+      @media (prefers-reduced-motion: reduce){ #stockAlert.show .sa-card{ animation:none; } }
+      #stockAlert .sa-title{ font-size:16px; font-weight:800; color:#C7432B; margin-bottom:8px; }
+      #stockAlert .sa-item{ font-size:14.5px; font-weight:800; line-height:1.6; }
+      #stockAlert .sa-sub{ font-size:11.5px; font-weight:700; color:var(--wood-dark); margin-top:8px; line-height:1.5; }
+      #stockAlert .sa-btn{
+        margin-top:11px; cursor:pointer; font-family:inherit;
+        font-size:13.5px; font-weight:800; color:#fff;
+        background:#C7432B; border:2.5px solid var(--ink); border-radius:999px;
+        padding:6px 26px; min-height:38px; box-shadow:0 3px 0 var(--ink);
+      }
+      #stockAlert .sa-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--ink); }
       /* 大成功！の大きな表示（きまぐれ／こだわり注文のぴったり提供時） */
       #bigBanner{
         position:absolute; left:50%; top:32%; z-index:16; pointer-events:none;
@@ -760,8 +789,9 @@
       /* 在庫表示：ピッカー・補充タブ共通。残り3個以下は警告色、在庫0はグレーアウト */
       .pick-item .pick-stock{ font-size:10px; font-weight:800; color:var(--wood-dark); line-height:1.3; }
       .pick-item .pick-stock.low{ color:#E4572E; }
-      .pick-item.out{ opacity:.45; filter:grayscale(.7); cursor:default; }
-      .pick-item.out:active{ transform:none; }
+      /* 在庫0の材料もタップ自体は受け付け、押すと在庫不足ポップで
+         材料名を知らせる（選ぶことはできない） */
+      .pick-item.out{ opacity:.45; filter:grayscale(.7); cursor:pointer; }
       .stock-num{ font-weight:800; font-variant-numeric:tabular-nums; }
       .stock-num.low{ color:#E4572E; }
       .cat-btn .cat-stock{ font-size:10px; font-weight:800; color:var(--wood); white-space:nowrap; }
@@ -1546,6 +1576,18 @@
           <div id="pairLog"></div>
           <div id="pairActions"></div>
           <div id="pairHint"></div>
+        </div>
+      </div>
+
+      <!-- 在庫不足ポップ：レシピ（メニュー）から作る時も、手動で素材を
+           選んで作る時も、材料の在庫が足りなければ不足している材料名を
+           まとめて知らせる。モーダルより前面に出る -->
+      <div id="stockAlert" role="alert" style="display:none">
+        <div class="sa-card">
+          <div class="sa-title">⚠️ 材料が足りません</div>
+          <div id="stockAlertList"></div>
+          <div class="sa-sub">「補充」タブで仕入れてから作ってね</div>
+          <button class="sa-btn" id="stockAlertClose" type="button">とじる</button>
         </div>
       </div>
     </div>
@@ -3053,6 +3095,50 @@
         state.stock[k] = Math.max(0, stockOf(kind, c[kind]) - 1);
       });
     }
+    /* 在庫が足りない材料の名前を全て集める（レシピ／手動調合共通） */
+    function missingStockNames(c){
+      var missing = [];
+      ['base','mixer','snack'].forEach(function(kind){
+        if (c && c[kind] && stockOf(kind, c[kind]) <= 0) missing.push(ingName(kind, c[kind]));
+      });
+      return missing;
+    }
+    /* 在庫不足ポップ：不足している材料名を「〇〇の在庫がありません」と
+       1行ずつ、複数ある場合はまとめて1つのポップに並べて知らせる。
+       メニュー（モーダル）を開いたまま作ろうとした時でも見えるよう、
+       モーダルより前面に出す */
+    var stockAlertTimer = null;
+    function showStockAlert(missing){
+      if (!missing || !missing.length) return;
+      var pop = $('stockAlert'), list = $('stockAlertList');
+      if (!pop || !list){
+        toast(missing.join('・') + 'の在庫がありません', '「補充」タブで仕入れてね');
+        return;
+      }
+      list.innerHTML = missing.map(function(n){
+        return '<div class="sa-item">' + n + 'の在庫がありません</div>';
+      }).join('');
+      pop.style.display = 'flex';
+      pop.classList.remove('show');
+      void pop.offsetWidth;
+      pop.classList.add('show');
+      clearTimeout(stockAlertTimer);
+      stockAlertTimer = setTimeout(hideStockAlert, 4500);
+    }
+    function hideStockAlert(){
+      var pop = $('stockAlert');
+      if (!pop) return;
+      pop.classList.remove('show');
+      pop.style.display = 'none';
+      clearTimeout(stockAlertTimer);
+    }
+    (function(){
+      var pop = $('stockAlert');
+      if (!pop) return;
+      pop.addEventListener('click', function(e){ if (e.target === pop) hideStockAlert(); });
+      var btn = $('stockAlertClose');
+      if (btn) btn.addEventListener('click', hideStockAlert);
+    })();
     var saveTimer = null;
     /* バックアップ復元・セーブリセットの直後は true にして自動保存を
        止める。復元では localStorage へ復元データを書いた直後に
@@ -5791,11 +5877,7 @@
       if (tray) return;
       var combo0 = { base: sel.base, mixer: sel.mixer, snack: sel.snack };
       if (!comboInStock(combo0)){
-        var missing = [];
-        ['base','mixer','snack'].forEach(function(kind){
-          if (stockOf(kind, combo0[kind]) <= 0) missing.push(ingName(kind, combo0[kind]));
-        });
-        toast('材料が足りないにゃ…', missing.join('・') + ' が在庫切れ。「補充」で仕入れてね');
+        showStockAlert(missingStockNames(combo0));
         return;
       }
       var btn = $('makeBtn');
@@ -9212,11 +9294,7 @@
     function makeFromRecipe(recipe){
       if (!recipe) return;
       if (!comboInStock(recipe)){
-        var missing = [];
-        ['base','mixer','snack'].forEach(function(kind){
-          if (stockOf(kind, recipe[kind]) <= 0) missing.push(ingName(kind, recipe[kind]));
-        });
-        toast('材料が足りないにゃ…', missing.join('・') + ' が在庫切れ。「補充」で仕入れてね');
+        showStockAlert(missingStockNames(recipe));
         return;
       }
       var hadTray = !!tray;
@@ -9265,7 +9343,7 @@
         availableIng(pk).forEach(function(item){
           var n = stockOf(pk, item.id);
           var out = n <= 0;
-          phtml += '<button class="pick-item' + (sel[pk] === item.id ? ' sel' : '') + (out ? ' out' : '') + '" data-pick="' + item.id + '" type="button"' + (out ? ' disabled' : '') + '>' +
+          phtml += '<button class="pick-item' + (sel[pk] === item.id ? ' sel' : '') + (out ? ' out' : '') + '" data-pick="' + item.id + '" type="button"' + (out ? ' aria-label="' + item.name + '（在庫なし）"' : '') + '>' +
             (ingMatchesConsult(pk, item.id, consultTastesPick) ? '<span class="consult-hint" title="お悩み相談に合いそう">💭</span>' : '') +
             chipIcon(pk, item.id) +
             '<span class="pick-name">' + item.name + '</span>' +
@@ -9275,7 +9353,13 @@
         body.innerHTML = phtml;
         body.querySelectorAll('[data-pick]').forEach(function(b){
           b.addEventListener('click', function(){
-            sel[pk] = b.getAttribute('data-pick');
+            var pickId = b.getAttribute('data-pick');
+            /* 在庫が無い素材は選ばず、その素材名で在庫不足ポップを出す */
+            if (stockOf(pk, pickId) <= 0){
+              showStockAlert([ingName(pk, pickId)]);
+              return;
+            }
+            sel[pk] = pickId;
             buildCatButtons();
             closeModal();
           });
