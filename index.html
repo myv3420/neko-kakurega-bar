@@ -5344,14 +5344,56 @@
 
     /* ---------- トースト ---------- */
     var toastTimer = null;
+    /* トーストの行割り：会話吹き出し・トーク画面と同じ文節ベースの
+       行割り（breakTextLines）を使い、main／sub それぞれを文節の
+       切れ目でのみ折って、箱の幅を一番長い行に合わせる。
+       以前はテキストをそのまま入れていたため、絶対配置の
+       収縮幅（left:50% のため実質ステージ幅の半分ほど）の中で
+       ブラウザが勝手に折り返し、「第／5話」のように数字の途中や
+       「…開いて／ね」のように文末1文字だけが次行に落ちる
+       不自然な改行になっていた。1文節自体が上限より長くて
+       割れない場合だけ、文節の切れ目に <wbr> を入れる
+       フォールバックに落とす（talkTextHtml と同じ作法） */
+    function layoutToastText(t, main, sub){
+      var wrapW = (t.offsetParent && t.offsetParent.clientWidth) || ($('stage') && $('stage').clientWidth) || 0;
+      if (!wrapW) return false;
+      var cap = Math.floor(wrapW * 0.92) - 32; /* padding 14px×2 ＋ border 2px×2（#toast の max-width:92% が上限） */
+      if (cap <= 0) return false;
+      var jobs = [{ text: main, fs: '13px', sub: false }];
+      if (sub) jobs.push({ text: sub, fs: '11px', sub: true });
+      var parts = [], maxW = 0, i, j;
+      for (i = 0; i < jobs.length; i++){
+        var measure = (function(fs){ return function(s){ return measureTalkText(s, fs, '700'); }; })(jobs[i].fs);
+        var lines = breakTextLines(jobs[i].text, cap, measure);
+        if (!lines) return false; /* 割れない文節がある：呼び出し側のフォールバックへ */
+        for (j = 0; j < lines.length; j++) maxW = Math.max(maxW, measure(lines[j]));
+        parts.push({ lines: lines, sub: jobs[i].sub });
+      }
+      for (i = 0; i < parts.length; i++){
+        var sp = document.createElement('span');
+        if (parts[i].sub) sp.className = 't-sub';
+        sp.innerHTML = parts[i].lines.map(escChatHtml).join('<br>');
+        t.appendChild(sp);
+      }
+      t.style.width = Math.ceil(maxW + 32 + 4) + 'px';
+      return true;
+    }
     function toast(main, sub){
       var t = $('toast');
       t.innerHTML = '';
-      t.appendChild(document.createTextNode(main));
-      if (sub){
-        var sp = document.createElement('span');
-        sp.className = 't-sub'; sp.textContent = sub;
-        t.appendChild(sp);
+      t.style.width = '';
+      if (!layoutToastText(t, main, sub)){
+        /* フォールバック：文節の切れ目にだけ <wbr> を入れ、
+           少なくとも単語の途中では折れないようにする */
+        var mainSpan = document.createElement('span');
+        mainSpan.innerHTML = segmentChatText(main).map(escChatHtml).join('<wbr>');
+        t.appendChild(mainSpan);
+        if (sub){
+          var sp = document.createElement('span');
+          sp.className = 't-sub';
+          sp.innerHTML = segmentChatText(sub).map(escChatHtml).join('<wbr>');
+          t.appendChild(sp);
+        }
       }
       t.classList.add('show');
       clearTimeout(toastTimer);
