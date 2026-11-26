@@ -591,8 +591,8 @@
          （〜の注文）」と、意味のまとまりごとに行を分ける。本文のうち
          ドリンク名（通常注文）と材料名（こだわり注文）は
          white-space:nowrap の span（.ob-nw）に入れ、単語の途中で
-         絶対に割れないようにする。幅はステージ幅の42%まで（元の
-         大きさ）。それでもドリンク名がはみ出す場合は
+         絶対に割れないようにする。幅は全席共通で本文に合う
+         fit-content（最大170px）。それでもドリンク名がはみ出す場合は
          JS（fitOrderBubble）がフォントを少し縮めて収める。
          例外はお悩み相談とこだわり注文の吹き出し：文章が折り返すと
          箱が最大幅いっぱいに広がり、本文の左右に大きな空白が残って
@@ -604,7 +604,8 @@
          最大幅で1行に収まらない場合はそこで改行したうえで、
          改行後の各行が収まる幅にフィットする。材料名そのものは
          途中で割れない。
-         他の注文（通常・きまぐれ等）は元の大きさのまま。
+         他の注文（通常・きまぐれ等）も CSS の fit-content で
+         本文幅に収まる（この処理は通らない）。
          端の席で
          吹き出しがステージ外にはみ出しそうなときも JS が横位置を
          クランプし、しっぽ（::after）は --tx で猫の真上を指し続ける。
@@ -619,7 +620,7 @@
       .order-bubble{
         position:absolute; transform:translateX(-50%);
         background:#fff; border:2.5px solid var(--ink); border-radius:12px;
-        padding:4px 7px 5px; min-width:62px; max-width:42%;
+        width:fit-content; padding:6px 12px; min-width:0; max-width:170px;
         font-size:11px; font-weight:800; line-height:1.25; text-align:center; color:var(--ink);
         text-wrap:balance;
         box-shadow:0 3px 0 rgba(74,53,37,.25);
@@ -630,13 +631,14 @@
         content:""; position:absolute; left:var(--tx,50%); bottom:-8px; transform:translateX(-50%);
         border:5px solid transparent; border-top:7px solid var(--ink); border-bottom:none;
       }
-      /* 中央の席（真ん中の席）の吹き出しだけ、横幅を本文に寄せる：
+      /* 全ての席（中央・左右）の吹き出し共通で、横幅を本文に寄せる：
          固定の広い幅や min-width は持たず、テキストの長さに応じた
          fit-content で最大170pxまでに収め、左右パディングも
          通常のセリフ吹き出し並みにコンパクト（6px 12px）にする。
-         左右の席の吹き出しと、縦位置（placeOrderBubble の段）は
+         吹き出しの表示位置（placeOrderBubble の段・横位置）は
          従来のまま変えない。文章の折り返しは base の
-         text-wrap:balance が行の長さを均す */
+         text-wrap:balance が行の長さを均す。
+         .center-seat は互換のため残す（base と同内容） */
       .order-bubble.center-seat{
         width:fit-content; min-width:0; max-width:170px;
         padding:6px 12px;
@@ -5344,19 +5346,17 @@
        セリフのはみ出しだけを防ぐ。他の注文吹き出し
        （通常・きまぐれ等）は元の大きさのままで、この処理は通らない */
     function fitTextBubbleWidth(b, layerW){
-      /* 中央の席の吹き出しは CSS の上限（170px）を最大幅として
-         フィットさせる。それ以外は従来どおりステージ幅の42%まで */
-      var isCenter = b.classList.contains('center-seat');
-      var maxW = isCenter ? Math.min(170, layerW - 4) : Math.floor(layerW * 0.42);
+      /* 全ての席の吹き出しは CSS の上限（170px）を最大幅として
+         フィットさせる（中央・左右で扱いを変えない） */
+      var maxW = Math.min(170, layerW - 4);
       if (b.offsetWidth < maxW - 1) return; /* 折り返していない＝すでに本文幅 */
       var h0 = b.offsetHeight;
       var pw = 0;
       var pills = b.querySelectorAll('.ob-vip, .ob-memo, .ob-badge');
       for (var i = 0; i < pills.length; i++) pw = Math.max(pw, pills[i].offsetWidth);
-      /* 下限の余白分：中央の席は左右パディング24px＋枠5px分、
-         それ以外は左右パディング14px＋枠5px分。中央の席には
-         固定の min-width（62px）も課さない */
-      var floor = isCenter ? pw + 29 : Math.max(62, pw + 19);
+      /* 下限の余白分：左右パディング24px＋枠5px分。
+         固定の min-width（62px）は課さない */
+      var floor = pw + 29;
       var w = maxW;
       var fw = maxW;
       while (w - 2 >= floor){
@@ -5367,9 +5367,9 @@
       }
       b.style.width = fw + 'px';
       /* はみ出しチェック：最長行が内容幅（左右パディングを除いた
-         幅）を超えていたら、収まるまで広げ直す。中央の席は
-         左右パディングが24pxなので、その分を差し引く */
-      var padX = isCenter ? 24 : 14;
+         幅）を超えていたら、収まるまで広げ直す。左右パディングは
+         全席共通で24pxなので、その分を差し引く */
+      var padX = 24;
       var guard = 0;
       while (guard++ < 80 && fw < maxW){
         if (bubbleLongestLine(b) <= b.clientWidth - padX + 1) break;
@@ -5436,10 +5436,11 @@
         b.className = 'order-bubble';
         b.innerHTML = ((vipHtml || memoHtml) ? '<span class="ob-head">' + vipHtml + memoHtml + '</span>' : '') + '<span class="ob-main"><span class="ob-nw">' + order.name + '</span></span><span class="ob-sub">' + occ.name + 'の注文</span>';
       }
-      /* 中央の席の吹き出しだけ、横幅を本文に寄せる専用クラスを付ける
-         （幅・パディングの調整は CSS の .order-bubble.center-seat と
-         fitTextBubbleWidth の上限170pxが担う。左右の席は付けない） */
-      if (occ.seatIdx === 1) b.classList.add('center-seat');
+      /* 全ての席の吹き出しに、横幅を本文に寄せるクラスを付ける
+         （幅・パディングの調整は CSS の .order-bubble 本体と
+         .order-bubble.center-seat、fitTextBubbleWidth の上限170pxが
+         担う。表示位置は placeOrderBubble のまま変えない） */
+      b.classList.add('center-seat');
       orderLayer.appendChild(b);
       occ.orderEl = b;
       fitOrderBubble(b, occ);
