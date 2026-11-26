@@ -1779,7 +1779,7 @@
     }
     function comboKey(c){ return c.base + '+' + c.mixer + '+' + c.snack; }
 
-    /* ---------- レシピ帳（53種） ---------- */
+    /* ---------- レシピ帳（61種） ---------- */
     var RECIPES = [
       { id:'r1', name:'マタタビジントニック', base:'matatabi',  mixer:'soda',  snack:'mint',   price:46, hint:'ソーダとミントで爽やかにゃ…' },
       { id:'r2', name:'マタタビハイボール',   base:'matatabi',  mixer:'soda',  snack:'fish',   price:44, hint:'シュワッと＋お魚チップスにゃ…' },
@@ -1840,7 +1840,19 @@
       { id:'r50', name:'夜更けのジンジャーコーヒー', base:'coffee', mixer:'ginger', snack:'cheese', price:54, hint:'ほろ苦コーヒーにジンジャーの刺激、チーズを添えてにゃ…' },
       { id:'r51', name:'月あかりミルクサワー', base:'milk',      mixer:'lemon',  snack:'katsuo',    price:44, hint:'ミルクにレモンの酸味、かつお節の香りもにゃ…' },
       { id:'r52', name:'まろやかマタタビ割り', base:'matatabi',  mixer:'yogurt', snack:'olive',     price:58, hint:'マタタビとヨーグルトのまろやかさ、オリーブを添えてにゃ…' },
-      { id:'r53', name:'星屑ジンジャーフィズ', base:'hoshikuzu', mixer:'ginger', snack:'fish',      price:55, hint:'星屑にジンジャーの刺激、お魚チップスもにゃ…' }
+      { id:'r53', name:'星屑ジンジャーフィズ', base:'hoshikuzu', mixer:'ginger', snack:'fish',      price:55, hint:'星屑にジンジャーの刺激、お魚チップスもにゃ…' },
+      /* 追加レシピ第4弾（r54〜r61）：余りがちなオリーブを使う通常レシピ。
+         ベース×割材は既存のオリーブ使用分（ゆず+トニック／プラム+レモン／
+         プラム+ベリー／コーヒー+ソーダ／マタタビ+ヨーグルト）と重ならない
+         組み合わせで、ベース・割材ともに散らして配分。オリーブ解放が条件 */
+      { id:'r54', name:'月影マタタビサワー',   base:'matatabi',  mixer:'lemon',  snack:'olive',     price:58, hint:'マタタビにレモンの酸味、オリーブの塩気もにゃ…' },
+      { id:'r55', name:'月夜のまろやかミルク', base:'milk',      mixer:'yogurt', snack:'olive',     price:50, hint:'ミルクとヨーグルトのまろやかさに、オリーブを添えてにゃ…' },
+      { id:'r56', name:'星あかりハニーロック', base:'hoshikuzu', mixer:'honey',  snack:'olive',     price:60, hint:'星屑とはちみつの甘さに、オリーブの塩気がアクセントにゃ…' },
+      { id:'r57', name:'夜桜ベリーフィズ',     base:'sakura',    mixer:'berry',  snack:'olive',     price:59, hint:'さくらとベリーの甘酸っぱさに、オリーブの塩気にゃ…' },
+      { id:'r58', name:'深夜のハニーコーヒー', base:'coffee',    mixer:'honey',  snack:'olive',     price:58, hint:'はちみつコーヒーの甘さに、オリーブの塩気にゃ…' },
+      { id:'r59', name:'月光ゆずソーダ',       base:'yuzu',      mixer:'soda',   snack:'olive',     price:58, hint:'ゆずの香りとシュワッとソーダ、オリーブも添えてにゃ…' },
+      { id:'r60', name:'宵闇プラムジンジャー', base:'plum',      mixer:'ginger', snack:'olive',     price:57, hint:'プラムにジンジャーの刺激、オリーブの塩気もにゃ…' },
+      { id:'r61', name:'花月さくらトニック',   base:'sakura',    mixer:'tonic',  snack:'olive',     price:63, hint:'さくら色の一杯をトニックで割って、オリーブを添えてにゃ…' }
     ];
     /* ---------- 特別レシピ（ショップで星⭐を払って解放） ----------
        高価格帯の特別メニュー。解放するまでメニューにも注文にも出ない。
