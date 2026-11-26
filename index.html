@@ -1129,6 +1129,22 @@
       }
       .badge-chip.locked{ background:#EFE9DC; border-color:#CBBFA5; color:#A5936F; }
       .badge-ending{ font-size:11px; font-weight:700; color:var(--wood-dark); margin-top:6px; line-height:1.6; }
+      /* 本棚タブが4つになったので折り返し可にし、未読印も出せるように */
+      .zukan-tabs.wrap{ flex-wrap:wrap; }
+      .zukan-tabs.wrap .zukan-tab{ flex:1 1 40%; position:relative; }
+      .zukan-tab .tab-dot{
+        position:absolute; top:-6px; right:-4px; min-width:18px; height:18px;
+        border-radius:50%; background:#E4572E; color:#FFF8E7;
+        font-size:11px; font-weight:800; line-height:16px; text-align:center;
+        border:2px solid #FFF3DC; box-shadow:0 1px 3px rgba(0,0,0,.3);
+      }
+      /* 本棚「ご近所さん」タブ：お店カード内のストーリー本文（展開表示） */
+      .shop-story-text{
+        font-size:12.5px; font-weight:700; line-height:1.75; color:var(--wood-dark);
+        background:rgba(180,140,80,.13); border-radius:8px;
+        padding:8px 10px; margin:2px 0 6px; width:100%; box-sizing:border-box;
+      }
+      .shop-deliver-count{ font-size:11px; font-weight:800; color:#8A6D1F; margin-top:3px; }
       .reread-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center; }
       /* 本棚「常連猫」タブ：後日談カード内の各話タイトル */
       .memo-ep-title{ font-size:12.5px; font-weight:800; color:var(--wood-dark); }
@@ -2485,12 +2501,181 @@
        状態はすべて state.board に保存する（既存セーブには移行処理で
        初期状態を追加する）。
        ========================================================= */
+    /* ご近所のお店（おすそわけ依頼先）全7軒。各店に店主猫（名前・
+       猫種・性格のひとこと）を設定し、依頼文（reqNormal／reqUrgent／
+       reqSet）・納品のお礼（thanks）・逆おすそわけの引き取り文
+       （pickup）は店主の口調で書く。{ing}＝素材名、{qty}＝個数、
+       {theme}＝セットのテーマ名に置換される。
+       from は従来セーブ・表示互換のために残してある店主表記 */
     var BOARD_SHOPS = [
-      { name:'肉球カフェ',       from:'店主タマ' },
-      { name:'月夜ミルクホール', from:'店主ミル' },
-      { name:'港町ラム酒場',     from:'船乗りパオロ' },
-      { name:'しっぽブックス',   from:'店主しおり' }
+      { id:'nikukyu', name:'肉球カフェ', from:'店主タマ', owner:'タマ', breed:'ミケ・短毛', emoji:'☕',
+        trait:'明るくて世話焼き。常連さんの好みを全部覚えている',
+        reqNormal:'「{ing}」が切れそうにゃん！ {qty}個、譲ってくれると助かるにゃん♪ カフェの常連さんが待ってるにゃん',
+        reqUrgent:'大ピンチにゃん！！「{ing}」が今すぐ{qty}個だけ要るにゃん！ たすけてにゃん！',
+        reqSet:'週末の限定メニューに「{theme}」が要るにゃん！ まとめて譲ってくれると嬉しいにゃん♪',
+        thanks:[
+          '「{ing}」、さっそくカフェで使ったにゃん♪ 常連さんが「今日のは格別にゃん」って喜んでたにゃん、ありがとうにゃん！',
+          '届いた「{ing}」で限定メニューが出せたにゃん！ お礼に、今度カフェの新作を味見してほしいにゃん♪'
+        ],
+        pickup:'掲示板の「{ing}」×{qty}、カフェで使わせてもらうにゃん♪ ありがとうにゃん！' },
+      { id:'milkhall', name:'月夜ミルクホール', from:'店主ミル', owner:'ミル', breed:'しろ・長毛', emoji:'🌙',
+        trait:'おっとり穏やか。月の満ち欠けでメニューを変える',
+        reqNormal:'「{ing}」が少なくなってきましたにゃぁ…。{qty}個、分けていただけると助かりますにゃぁ',
+        reqUrgent:'困りましたにゃぁ…「{ing}」が今すぐ{qty}個だけ必要なのですにゃぁ。どうかお願いしますにゃぁ',
+        reqSet:'月夜の特別メニューに「{theme}」を用意したいのですにゃぁ。まとめて分けていただけますかにゃぁ',
+        thanks:[
+          '「{ing}」、月夜のメニューに使わせていただきましたにゃぁ。常連さんが静かに頷いてくださって、嬉しかったですにゃぁ',
+          '届いた「{ing}」のおかげで、今夜も穏やかな時間が流れましたにゃぁ。ありがとうございますにゃぁ'
+        ],
+        pickup:'掲示板の「{ing}」×{qty}、ありがたく頂戴しましたにゃぁ。月夜の一杯に使いますにゃぁ' },
+      { id:'rum', name:'港町ラム酒場', from:'船乗りパオロ', owner:'パオロ', breed:'サバトラ・短毛', emoji:'⚓',
+        trait:'元船乗りで豪快。港の噂と旅の土産話が大好き',
+        reqNormal:'おう、「{ing}」が底をつきそうだにゃ！ {qty}個、譲ってくれると助かるにゃ。港の連中が待ってるだにゃ',
+        reqUrgent:'船が出る前にピンチだにゃ！「{ing}」が今すぐ{qty}個だけ要るにゃ、頼むにゃ！',
+        reqSet:'今夜の船乗り集会に「{theme}」が要るだにゃ。まとめて譲ってくれにゃ',
+        thanks:[
+          '「{ing}」、酒場で大活躍だったにゃ！ 常連の船乗りが「いい味だ」って唸ってただにゃ、感謝だにゃ！',
+          '届いた「{ing}」でピンチを切り抜けたにゃ。今度、港の土産話を持っていくにゃ'
+        ],
+        pickup:'掲示板の「{ing}」×{qty}、ありがたくもらっていくにゃ！ 酒場で大事に使うだにゃ' },
+      { id:'books', name:'しっぽブックス', from:'店主しおり', owner:'しおり', breed:'キジトラ・短毛', emoji:'📚',
+        trait:'静かな読書家。おすすめ本の栞を添えてくれる',
+        reqNormal:'「{ing}」の在庫が少なくなってしまいましたですにゃ。{qty}個、譲っていただけると助かりますですにゃ',
+        reqUrgent:'申し訳ありませんですにゃ…「{ing}」が今すぐ{qty}個だけ必要なのですにゃ。お急ぎでお願いしますですにゃ',
+        reqSet:'読書会のお供に「{theme}」を用意したいのですにゃ。まとめて譲っていただけますかですにゃ',
+        thanks:[
+          '「{ing}」、本のカフェスペースで使わせていただきましたですにゃ。静かな午後に、よく合う味でしたですにゃ',
+          '届いた「{ing}」のおかげで、読書会が和やかになりましたですにゃ。お礼に、おすすめ本の栞を添えますですにゃ'
+        ],
+        pickup:'掲示板の「{ing}」×{qty}、頂戴しましたですにゃ。しっぽブックスで大切に使いますですにゃ' },
+      { id:'kohaku', name:'あまいもん処 こはく堂', from:'店主こはく', owner:'こはく', breed:'茶シロ・短毛', emoji:'🍰',
+        trait:'甘いものに目がない試食係店主。新作の味見が日課',
+        reqNormal:'「{ing}」があと少しにゃ！ {qty}個譲ってくれたら、新作スイーツの試食を内緒でつけるにゃ♪',
+        reqUrgent:'甘いピンチにゃ！「{ing}」が今すぐ{qty}個だけ要るにゃ！ オーブンが待ってるにゃ！',
+        reqSet:'新作の材料に「{theme}」が要るにゃ。まとめて譲ってくれると、あま〜くお礼するにゃ♪',
+        thanks:[
+          '「{ing}」、新作スイーツに使ったにゃ♪ 試食した常連さんが、ほっぺを押さえてたにゃ！ ありがとうにゃ',
+          '届いた「{ing}」で限定のお菓子が焼けたにゃ。今度、焼きたてを持っていくにゃ♪'
+        ],
+        pickup:'掲示板の「{ing}」×{qty}、もらっていくにゃ♪ こはく堂のお菓子に変身させるにゃ' },
+      { id:'tsukimi', name:'月見茶屋', from:'店主つきみ', owner:'つきみ', breed:'ハチワレ・長毛', emoji:'🍵',
+        trait:'落ち着いた和の心。季節の挨拶と庭の手入れを欠かさない',
+        reqNormal:'「{ing}」が少のうございますにゃね。{qty}個、分けていただけると助かりますにゃね',
+        reqUrgent:'困りましたにゃね…「{ing}」が今すぐ{qty}個だけ必要なのですにゃね。どうかお願いいたしますにゃね',
+        reqSet:'季節の茶会に「{theme}」を用意したいのですにゃね。まとめて分けていただけますかにゃね',
+        thanks:[
+          '「{ing}」、茶屋のおもてなしに使わせていただきましたにゃね。お客さまがほっとした顔をなさって、嬉しゅうございましたにゃね',
+          '届いた「{ing}」のおかげで、静かな良い時間が流れましたにゃね。ありがとうございますにゃね'
+        ],
+        pickup:'掲示板の「{ing}」×{qty}、ありがたく頂戴しましたにゃね。茶屋で大切に使いますにゃね' },
+      { id:'hanaakari', name:'花あかり', from:'店主すみれ', owner:'すみれ', breed:'サビ・短毛', emoji:'💐',
+        trait:'花の香りに敏感なロマンチスト。記念日の花束が得意',
+        reqNormal:'「{ing}」が足りなくて、花束みたいに困ってますにゃ。{qty}個、譲ってくれると嬉しいですにゃ',
+        reqUrgent:'記念日の花束にピンチですにゃ！「{ing}」が今すぐ{qty}個だけ要るんですにゃ、助けてくださいにゃ',
+        reqSet:'季節のアレンジに「{theme}」が要るんですにゃ。まとめて譲ってくれると助かりますにゃ',
+        thanks:[
+          '「{ing}」、花あかりのアレンジに使ったんですにゃ。お客さまが「香りまで素敵」って喜んでましたにゃ、ありがとうにゃ',
+          '届いた「{ing}」のおかげで、記念日の花束が完成したんですにゃ。今度、小さなブーケを届けますにゃ'
+        ],
+        pickup:'掲示板の「{ing}」×{qty}、頂いていきますにゃ。花あかりで大切に使いますにゃ' }
     ];
+    /* ご近所ストーリー：お店ごとの連続物語（各3話）。そのお店への
+       配達（おすそわけ依頼の納品）回数が SHOP_STORY_NEED の回数に
+       達するごとに次の話が解放される。解放した話は思い出の本棚の
+       「ご近所さん」タブで読み返せる。配達回数は state.board の
+       deliveries（店ID→回数）に保存し、記録が無い既存セーブは
+       0回から数え直す */
+    var SHOP_STORY_NEED = [2, 5, 9];
+    var SHOP_STORIES = {
+      nikukyu: { title:'看板メニューを作るにゃん', eps:[
+        { title:'試作品1号にゃん', text:'タマは新しい看板メニューを作ろうと、閉店後のカフェで試作品を並べていた。「味はいいのに、何か足りないにゃん…」。そこへ届いたおすそわけの素材をひと口。「これにゃん！ あとは、誰かに食べてもらう勇気だけにゃん」。タマの挑戦が始まった。' },
+        { title:'常連さんの本音にゃん', text:'試作品を出した週末、常連さんたちは「美味しいにゃん」と言いながらも、どこか物足りなさそうだった。タマはメモを取り続けた。「本音を聞くのが一番の隠し味にゃん」。夜、カフェのノートには改善点がびっしり書き込まれた。' },
+        { title:'看板メニューの日', text:'何度も作り直した一品が、ついに肉球カフェの看板メニューになった。店先には小さな看板が増え、行列ができる日もある。「BARさんのおすそわけがなかったら、生まれなかったにゃん」。タマは今も、新しい味を探している。' }
+      ]},
+      milkhall: { title:'月夜の約束', eps:[
+        { title:'曇りの夜のミルク', text:'月が見えない夜は、ミルクホールの窓辺も少し寂しい。「月は雲の向こうで、ちゃんと光ってるにゃぁ」。ミルは温かいミルクを出しながら、常連さんと静かに雲の切れ間を待った。その穏やかさが、この店の味だという。' },
+        { title:'星空ミルクの噂', text:'ある夜、ミルは「星空ミルク」という新しい一杯を出した。グラスの底で小さく光る甘さが評判になり、遠くから訪ねてくる猫も増えた。「BARさんのおかげにゃぁ。素材が届くと、夜空が広がるにゃぁ」。' },
+        { title:'月見の会', text:'満月の夜、ミルクホールで小さな月見の会が開かれた。常連さんたちは窓辺に並び、ミル特製の一杯を手に月を眺めた。「来年も、同じ月を見ようにゃぁ」。ミルの約束は、来年のカレンダーにもう書いてある。' }
+      ]},
+      rum: { title:'港の旧友', eps:[
+        { title:'届いた手紙', text:'パオロのもとに、昔の船仲間から手紙が届いた。「近々、港に寄るかもしれない」。パオロは手紙をカウンターに飾り、少し照れたように笑った。「あいつ、ラムの味だけは忘れてないはずだにゃ」。' },
+        { title:'嵐の前の仕込み', text:'再会が近づいた週、港は嵐の気配だった。パオロは古いレシピ帳を開き、船の上で分け合った一杯を再現しようと仕込みを続けた。「味の記憶は、羅針盤より確かにゃ」。' },
+        { title:'再会の乾杯', text:'嵐明けの夕方、旧友が酒場の扉を開けた。二匹は多くを語らず、まず一杯で乾杯した。「変わらない味だ」。パオロの酒場には、その夜から「再会の一杯」という裏メニューが増えたそうだ。' }
+      ]},
+      books: { title:'本に挟まっていた手紙', eps:[
+        { title:'挟まっていた手紙', text:'しおりは古い詩集の中に、宛名のない手紙を見つけた。丁寧な字で「ありがとう」とだけ書かれた手紙。「この本の持ち主さんに、届けたいですにゃ」。小さな探し物が始まった。' },
+        { title:'小さな手がかり', text:'詩集の奥付には、前の店の小さな印が残っていた。しおりはご近所のお店に聞いて回り、少しずつ持ち主の手がかりを集めた。「本は、帰る場所を覚えているんですにゃ」。' },
+        { title:'本が帰る日', text:'手紙の主は、詩集を譲った猫の孫だった。本と手紙は無事に届けられ、しっぽブックスにはお礼の栞が飾られた。「物語は、本の外にも続くんですにゃ」。しおりは今日も、静かにページをめくる。' }
+      ]},
+      kohaku: { title:'月夜パフェのレシピ', eps:[
+        { title:'季節のジャム', text:'こはくは季節の果物でジャムを作り、店じゅうに甘い香りを広げた。「あま〜い！ でも、主役はまだ決まってないにゃ」。試食のスプーンを握ったまま、こはくの悩みが始まった。' },
+        { title:'試食会の小さな失敗', text:'試食会の日、こはくの新作は甘すぎて、常連さんたちが水を飲み干した。「失敗もレシピのうちにゃ！」。こはくは笑ってメモを取り、酸味のバランスを探し直した。' },
+        { title:'月夜パフェ完成', text:'何度目かの試作で、甘さと酸味がぴたりと合った。「これが、こはく堂の月夜パフェにゃ！」。看板スイーツになったパフェには、BARからのおすそわけ素材がそっと使われている。' }
+      ]},
+      tsukimi: { title:'茶屋の庭の四季', eps:[
+        { title:'庭の手入れ', text:'つきみは朝早くから茶屋の庭を整えていた。「お客さまが来る前に、風の通り道を作るんにゃね」。小さな庭の石と苔が、少しずつ表情を取り戻していった。' },
+        { title:'雨上がりのお客さま', text:'夕立のあと、濡れた傘を抱えたお客さまが茶屋に駆け込んだ。つきみは温かいお茶と甘いものを出し、「雨も、悪くないでしょうにゃね」と笑った。その日から、その猫は雨の日の常連になった。' },
+        { title:'小さな茶会', text:'庭が見頃になった週末、つきみは小さな茶会を開いた。ご近所のお店の店主たちも招かれ、静かな時間が流れた。「次は、月見の茶会ですにゃね」。茶屋の予定表には、もう次の季節が書かれている。' }
+      ]},
+      hanaakari: { title:'記念日の花束', eps:[
+        { title:'記念日の注文', text:'すみれのもとに、「結婚記念日に、昔と同じ花束を」という注文が届いた。「花には、思い出の香りがあるんですにゃ」。すみれは古い注文票を探し始めた。' },
+        { title:'足りない花', text:'記念日が近づいた頃、大事な花が市場で品薄になった。困ったすみれに、ご近所のお店たちが少しずつ花や飾りを分けてくれた。「一軒じゃ無理でも、街ならできるにゃ」。' },
+        { title:'花あかりの看板', text:'記念日の朝、花束は無事に届けられた。お礼に届いた写真には、笑顔と花束が並んでいる。花あかりの店先には今、その写真が小さく飾られている。すみれの宝物だ。' }
+      ]}
+    };
+    function shopById(id){
+      for (var i = 0; i < BOARD_SHOPS.length; i++) if (BOARD_SHOPS[i].id === id) return BOARD_SHOPS[i];
+      return null;
+    }
+    function shopByName(name){
+      for (var i = 0; i < BOARD_SHOPS.length; i++) if (BOARD_SHOPS[i].name === name) return BOARD_SHOPS[i];
+      return null;
+    }
+    /* 依頼に紐づくお店の定義を返す。新しい依頼は shopId を持つが、
+       既存セーブの依頼は店名（shop）から引く */
+    function shopDefForRequest(r){
+      if (!r) return null;
+      return (r.shopId && shopById(r.shopId)) || shopByName(r.shop) || null;
+    }
+    function shopDeliveryCount(shopId){
+      var b = boardState();
+      return (b.deliveries && b.deliveries[shopId]) || 0;
+    }
+    /* 解放済みのご近所ストーリーの話数（0〜3） */
+    function shopUnlockedCount(shopId){
+      var n = shopDeliveryCount(shopId), c = 0;
+      SHOP_STORY_NEED.forEach(function(t){ if (n >= t) c++; });
+      return c;
+    }
+    /* 依頼文：店主の口調テンプレートに素材名・個数・テーマを差し込む。
+       店主が引けない依頼（旧セーブ等）は従来の汎用文にする */
+    function shopReqText(r){
+      var shop = shopDefForRequest(r);
+      var tpl = shop ? (r.type === 'set' ? shop.reqSet : (r.type === 'urgent' ? shop.reqUrgent : shop.reqNormal)) : null;
+      if (!tpl){
+        if (r.type === 'set') return '「' + (r.theme || 'セット') + '」の材料が足りないにゃ！　まとめて譲ってほしいにゃ。';
+        if (r.type === 'urgent') return 'ピンチにゃ！「' + ingName(r.kind, r.ingId) + '」が今すぐ ' + r.qty + '個だけ要るにゃ、譲ってほしいにゃ！';
+        return '「' + ingName(r.kind, r.ingId) + '」が足りなくて困ってるにゃ！　' + r.qty + '個、譲ってほしいにゃ。';
+      }
+      return tpl.split('{ing}').join(r.kind ? ingName(r.kind, r.ingId) : '')
+                .split('{qty}').join(r.qty || '')
+                .split('{theme}').join(r.theme || 'セット');
+    }
+    /* 納品のお礼文：店主の口調の文面から1つ選ぶ（無ければ従来の後日談） */
+    function shopThanksText(shop, ingLabel){
+      if (shop && shop.thanks && shop.thanks.length){
+        var t = shop.thanks[Math.floor(Math.random() * shop.thanks.length)];
+        return t.split('{ing}').join(ingLabel);
+      }
+      return boardFollowupText(ingLabel);
+    }
+    /* 逆おすそわけの引き取り文：引き取りに来た店主の口調にする */
+    function shopPickupText(shop, ingLabel, qty){
+      if (shop && shop.pickup){
+        return shop.pickup.split('{ing}').join(ingLabel).split('{qty}').join(qty);
+      }
+      return '掲示板の「' + ingLabel + '」×' + qty + '、ありがたく引き取ったにゃ。うちで大事に使うにゃ！';
+    }
     /* 連続メモ（各3話）。taste は解決判定に使う味の系統（表示しない） */
     var MEMO_STORIES = {
       shiro: { catId:'shiro_s', title:'星を見る練習', eps:[
@@ -2774,6 +2959,13 @@
       /* giftNight＝大家さんの差し入れを最後に受け取った夜の番号
          （1夜に1回までの制限用。旧セーブには移行で 0 を補う） */
       if (typeof b.giftNight !== 'number') b.giftNight = 0;
+      /* deliveries＝お店ごとの配達（納品）回数 { 店ID: 回数 }。
+         ご近所ストーリーの解放判定に使う。記録が無い既存セーブは
+         0回から数え直す。shopStoryNew＝解放済みだがまだ本棚で
+         読んでいない話のキー（'店ID:話index'）の配列で、掲示板
+         バッジと本棚タブの印に使う */
+      if (!b.deliveries || typeof b.deliveries !== 'object') b.deliveries = {};
+      if (!Array.isArray(b.shopStoryNew)) b.shopStoryNew = [];
       b.requests.forEach(function(r){ if (r && !r.type) r.type = 'normal'; });
       return b;
     }
@@ -2901,7 +3093,7 @@
              星の報酬は据え置き */
           var setCoins = Math.max(30, Math.round(value * 1.2 / 5) * 5);
           b.setGap = 3; /* セットを出したので小休止に入る */
-          return { type:'set', shop:shop.name, from:shop.from, theme:picked.theme.name, items:items,
+          return { type:'set', shop:shop.name, shopId:shop.id, from:shop.from, theme:picked.theme.name, items:items,
                    coins:setCoins, stars: 1 + (Math.random() < 0.4 ? 1 : 0), done:false };
         }
       }
@@ -2912,7 +3104,7 @@
       if (roll >= 0.30 && roll < 0.50){
         var uQty = 1 + Math.floor(Math.random() * 2);
         var uCoins = Math.max(20, Math.round(uQty * boardUnitValue(pickIng.kind, pickIng.id) * 1.9 / 5) * 5);
-        return { type:'urgent', shop:shop.name, from:shop.from, kind:pickIng.kind, ingId:pickIng.id,
+        return { type:'urgent', shop:shop.name, shopId:shop.id, from:shop.from, kind:pickIng.kind, ingId:pickIng.id,
                  qty:uQty, coins:uCoins, stars:0, servesLeft:2, done:false };
       }
       /* --- 通常の単品依頼 --- */
@@ -2922,7 +3114,7 @@
          なるため、ささやかな色付けに留める */
       var coins = Math.max(15, Math.round(qty * boardUnitValue(pickIng.kind, pickIng.id) * 1.3 / 5) * 5);
       var stars = Math.random() < 0.3 ? 1 : 0; /* お礼はコイン中心、たまに星も */
-      return { type:'normal', shop:shop.name, from:shop.from, kind:pickIng.kind, ingId:pickIng.id, qty:qty, coins:coins, stars:stars, done:false };
+      return { type:'normal', shop:shop.name, shopId:shop.id, from:shop.from, kind:pickIng.kind, ingId:pickIng.id, qty:qty, coins:coins, stars:stars, done:false };
     }
     /* 急ぎ依頼の残り提供数：1杯提供するごとに1減らし、0になったら
        ペナルティなしで静かに剥がす（トーストも出さない） */
@@ -2974,7 +3166,7 @@
         b.offers.splice(i, 1);
         addCoins(o.coins);
         boardAddThanks(shop.name + '（' + shop.from + '）',
-          '掲示板の「' + ingName(o.kind, o.ingId) + '」×' + o.qty + '、ありがたく引き取ったにゃ。うちで大事に使うにゃ！');
+          shopPickupText(shop, ingName(o.kind, o.ingId), o.qty));
         pickedNames.push('「' + ingName(o.kind, o.ingId) + '」×' + o.qty + '（コイン +' + o.coins + '）');
       }
       if (pickedNames.length){
@@ -3178,6 +3370,7 @@
       if (unread) return true;
       if ((b.unreadThanks || 0) > 0) return true;
       if (landlordGiftAvailable()) return true;
+      if ((b.shopStoryNew || []).length) return true; /* 未読のご近所ストーリー解放 */
       return b.requests.some(function(r){ return !r.done && boardReqEnough(r); });
     }
     function updateBoardBadge(){
@@ -3206,11 +3399,35 @@
       var label = (r.type === 'set')
         ? (r.theme || 'セット') + '（' + items.map(function(it){ return ingName(it.kind, it.ingId); }).join('・') + '）'
         : ingName(r.kind, r.ingId);
-      boardAddThanks(r.shop + '（' + r.from + '）', boardFollowupText(label));
+      var shopDef = shopDefForRequest(r);
+      boardAddThanks(r.shop + '（' + r.from + '）', shopThanksText(shopDef, label));
+      /* 配達回数を数え、ご近所ストーリーの解放ライン（2／5／9回）に
+         達したら未読として記録する（通知は下のトーストと掲示板
+         バッジ。読み返しは思い出の本棚「ご近所さん」タブ） */
+      var storyUnlock = null;
+      if (shopDef){
+        var unlockedBefore = shopUnlockedCount(shopDef.id);
+        b.deliveries[shopDef.id] = (b.deliveries[shopDef.id] || 0) + 1;
+        var unlockedAfter = shopUnlockedCount(shopDef.id);
+        if (unlockedAfter > unlockedBefore){
+          var newKey = shopDef.id + ':' + (unlockedAfter - 1);
+          if (b.shopStoryNew.indexOf(newKey) === -1) b.shopStoryNew.push(newKey);
+          var stDef = SHOP_STORIES[shopDef.id];
+          storyUnlock = { shopName: shopDef.name, ep: unlockedAfter,
+                          title: stDef ? stDef.eps[unlockedAfter - 1].title : '' };
+        }
+      }
       save();
       renderModalBody();
       updateBoardBadge();
       toast('おすそわけ完了！', r.shop + 'からお礼が届きました（コイン +' + r.coins + (r.stars ? '／⭐ +' + r.stars : '') + '）後日談の張り紙も届いています');
+      if (storyUnlock){
+        (function(u){
+          setTimeout(function(){
+            toast('📚 ご近所ストーリー解放！', u.shopName + 'の物語 第' + u.ep + '話「' + u.title + '」が読めるようになりました。思い出の本棚「ご近所さん」からどうぞ');
+          }, 3000);
+        })(storyUnlock);
+      }
     }
     /* 提供時のメモ連動解決：既読・未解決のメモがある猫本人（品種＋
        来店名の両方がメモの子と一致する来店）に、メモに合う味の系統の
@@ -7147,6 +7364,20 @@
       }).join('') + '<div class="rr-note">― 第' + (epIdx + 1) + '話 おわり ―</div>';
       log.scrollTop = 0;
     }
+    /* 本棚「ご近所さん」タブのストーリー「読む」ボタン：本文をその場で
+       展開し、その話の未読印（shopStoryNew）を消す */
+    function wireShopStoryButtons(root){
+      root.querySelectorAll('[data-shop-story]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var key = b.getAttribute('data-shop-story');
+          shopStoryOpen = (shopStoryOpen === key) ? null : key;
+          var bb = boardState();
+          var ni = bb.shopStoryNew.indexOf(key);
+          if (ni !== -1){ bb.shopStoryNew.splice(ni, 1); save(); updateBoardBadge(); }
+          renderModalBody();
+        });
+      });
+    }
     function wireMemoRereadButtons(root){
       root.querySelectorAll('[data-memo-reread]').forEach(function(b){
         b.addEventListener('click', function(){
@@ -9393,6 +9624,9 @@
        'vip'＝VIP猫（連続相談の記録・読み返し）／'pair'＝特別なお話
        （VIPペア特別ストーリー）。開いた直後は従来どおりペア物語から */
     var shelfTab = 'pair';
+    /* 本棚「ご近所さん」タブで展開中のストーリーのキー（'店ID:話index'）。
+       null＝何も開いていない */
+    var shopStoryOpen = null;
     /* 設定モーダル内のタブ：'sound'＝サウンド（BGMのON／OFF・音量）／'save'＝セーブ（クラウドセーブ・バックアップ・リセット） */
     var settingsTab = 'sound';
     function inviteDef(catId){
@@ -9814,10 +10048,12 @@
            「バッジ」タブの内容）、「特別なお話」＝VIPペア特別ストーリー
            （ショップの「ストーリー」タブとカード・購入・閲覧のデータは
            共通：pairCardHtml／state.pairStories） */
-        var htmlBk = '<div class="zukan-tabs" role="tablist">' +
+        var shelfNewCount = (boardState().shopStoryNew || []).length;
+        var htmlBk = '<div class="zukan-tabs wrap" role="tablist">' +
           '<button class="zukan-tab' + (shelfTab === 'regular' ? ' on' : '') + '" data-shelftab="regular" type="button">🐱 常連猫</button>' +
           '<button class="zukan-tab' + (shelfTab === 'vip' ? ' on' : '') + '" data-shelftab="vip" type="button">👑 VIP猫</button>' +
           '<button class="zukan-tab' + (shelfTab === 'pair' ? ' on' : '') + '" data-shelftab="pair" type="button">📚 特別なお話</button>' +
+          '<button class="zukan-tab' + (shelfTab === 'neighbor' ? ' on' : '') + '" data-shelftab="neighbor" type="button">🏠 ご近所さん' + (shelfNewCount ? '<span class="tab-dot">' + shelfNewCount + '</span>' : '') + '</button>' +
           '</div>';
         if (shelfTab === 'regular'){
           /* 常連猫タブ：常連メモの連載で解決済みの話だけを、猫（シリーズ）
@@ -9880,6 +10116,38 @@
               }).join('') + '</div>' +
               '</div>';
           });
+        } else if (shelfTab === 'neighbor'){
+          /* ご近所さんタブ：おすそわけ依頼先7軒の店主紹介と、お店ごとの
+             連続ストーリー（各3話）。配達回数が 2／5／9 回に達する
+             ごとに次の話が解放され、解放した話はここで読み返せる。
+             未解放の話は解放条件（必要な配達回数）を表示する */
+          htmlBk += '<p class="modal-note">おすそわけでお世話になっている、ご近所のお店と店主さんたちです。そのお店への配達が 2回／5回／9回 になると、お店の物語が1話ずつ解放されます。</p>';
+          var nb = boardState();
+          BOARD_SHOPS.forEach(function(shop){
+            var st = SHOP_STORIES[shop.id];
+            if (!st) return;
+            var delivered = (nb.deliveries && nb.deliveries[shop.id]) || 0;
+            var unlocked = shopUnlockedCount(shop.id);
+            htmlBk += '<div class="badge-cat">' +
+              '<div class="badge-cat-head">' + shop.emoji + ' ' + shop.name + '</div>' +
+              '<div class="badge-cat-sub">店主：' + shop.owner + '（' + shop.breed + '）／' + shop.trait + '</div>' +
+              '<div class="shop-deliver-count">🚶 配達 ' + delivered + ' 回 ／ 📖 物語「' + st.title + '」' + unlocked + '／' + st.eps.length + '話 解放' + (unlocked >= st.eps.length ? '・完結！' : '') + '</div>' +
+              st.eps.map(function(ep, i){
+                var need = SHOP_STORY_NEED[i];
+                var key = shop.id + ':' + i;
+                var isNew = nb.shopStoryNew.indexOf(key) !== -1;
+                if (delivered >= need){
+                  var row = '<div class="reread-row"><span class="memo-ep-title">第' + (i + 1) + '話「' + ep.title + '」</span>' +
+                    (isNew ? '<span class="badge-chip">✨ NEW</span>' : '') +
+                    '<button class="reread-btn" data-shop-story="' + key + '" type="button">' + (shopStoryOpen === key ? '📖 閉じる' : '📖 読む') + '</button></div>';
+                  if (shopStoryOpen === key) row += '<div class="shop-story-text">' + ep.text + '</div>';
+                  return row;
+                }
+                return '<div class="reread-row"><span class="memo-ep-title">第' + (i + 1) + '話「？？？」</span>' +
+                  '<button class="reread-btn" disabled type="button">🔒 配達' + need + '回で解放（あと' + (need - delivered) + '回）</button></div>';
+              }).join('') +
+              '</div>';
+          });
         } else {
           /* 特別なお話タブ：VIPペア特別ストーリー（従来の本棚の内容） */
           htmlBk += '<p class="modal-note">コイン： ' + state.coins + ' ／ 星⭐： ' + state.stars + ' ／ VIP猫同士の特別な物語が並ぶ、本棚です。対象の2匹が解放済みで、仲良し度が両方ともハート3つ以上になると、コインと⭐で購入できます。</p>';
@@ -9898,6 +10166,7 @@
         if (shelfTab === 'regular') wireMemoRereadButtons(body);
         if (shelfTab === 'vip') wireRereadButtons(body);
         if (shelfTab === 'pair') wirePairCards(body);
+        if (shelfTab === 'neighbor') wireShopStoryButtons(body);
       }
       if (currentModal === 'shop'){
         /* ショップ：3タブ構成。「招待」＝コインで遠方のネコ科VIPへ招待状、
@@ -10064,13 +10333,10 @@
                         : (r.type === 'set' ? '<span class="req-kind set">🎁セット</span>' : '');
             htmlB += '<div class="note-card req' + (r.type === 'urgent' ? ' urgent' : '') + '">' +
               '<div class="note-from">' + r.shop + '（' + r.from + '）より' + kindTag + '</div>';
+            /* 依頼文は店主の口調（shopReqText）。セットは内訳を続ける */
+            htmlB += '<p class="note-text">' + shopReqText(r) + '</p>';
             if (r.type === 'set'){
-              htmlB += '<p class="note-text">「' + (r.theme || 'セット') + '」の材料が足りないにゃ！　まとめて譲ってほしいにゃ。</p>' +
-                '<p class="note-set-items">' + items.map(function(it){ return '・' + ingName(it.kind, it.ingId) + ' ×' + it.qty + '（手持ち ' + stockOf(it.kind, it.ingId) + '）'; }).join('<br>') + '</p>';
-            } else if (r.type === 'urgent'){
-              htmlB += '<p class="note-text">ピンチにゃ！「' + ingName(r.kind, r.ingId) + '」が今すぐ ' + r.qty + '個だけ要るにゃ、譲ってほしいにゃ！</p>';
-            } else {
-              htmlB += '<p class="note-text">「' + ingName(r.kind, r.ingId) + '」が足りなくて困ってるにゃ！　' + r.qty + '個、譲ってほしいにゃ。</p>';
+              htmlB += '<p class="note-set-items">' + items.map(function(it){ return '・' + ingName(it.kind, it.ingId) + ' ×' + it.qty + '（手持ち ' + stockOf(it.kind, it.ingId) + '）'; }).join('<br>') + '</p>';
             }
             if (r.type !== 'set'){
               htmlB += '<div class="note-meta">手持ち：' + stockOf(r.kind, r.ingId) + ' 個　／　お礼：コイン +' + r.coins + (r.stars ? '・⭐ +' + r.stars : '') + '</div>';
@@ -10212,8 +10478,8 @@
           ['🍋 味の相性', '材料にはそれぞれ「甘い」「すっきり」「ほろ苦い」などの味があります。ずかんの「素材」タブでいつでも確認できます。'],
           ['🪙 コインと⭐', 'ドリンクを提供するとコインと⭐が貯まります。今夜のにぎわいゲージが満ちると精算になり、その夜のノルマを達成すると⭐ボーナスがもらえます。'],
           ['🔘 下の4つのボタン', '「メニュー」はレシピ帳で、発見したレシピはタップするとそのまま作れます。「ずかん」は猫・VIP猫・素材の図鑑です。「補充」はコインで材料を買い足す場所で、レア材料の解放もできます。「ショップ」には「招待」「レシピ」「ストーリー」の3タブがあり、コインで特別招待（遠方のネコ科VIPを招くこと）、⭐で特別レシピ、コインと⭐でペア特別ストーリーを解放できます。'],
-          ['📌 お店の掲示板', 'カウンター右端の掲示板をタップすると、近所のお店との「おすそわけ」や、常連猫のメモなどのお知らせが見られます。'],
-          ['📚 思い出の本棚', '店内の右奥の壁にある飾り棚（観葉植物と本が並んだ棚で、淡く光っています）をタップすると「思い出の本棚」が開きます。「常連猫」「VIP猫」「特別なお話」の3タブがあり、常連メモの後日談、VIP猫の連続相談（進み具合・結末・思い出バッジの確認と読み返し）、VIP猫同士の掛け合いが描かれる「ペア特別ストーリー」（各組・全7話）を読み返せます。ペア特別ストーリーは、対象の2匹が解放済みで、仲良し度が両方ともハート3つ以上になると、コインと⭐で購入できます。ショップの「ストーリー」タブからも同じ物語を購入・閲覧できます。'],
+          ['📌 お店の掲示板', 'カウンター右端の掲示板をタップすると、近所のお店（全7軒）との「おすそわけ」や、常連猫のメモなどのお知らせが見られます。依頼は各店の店主猫からのもので、納品するとお店への配達回数が増え、思い出の本棚「ご近所さん」の物語が少しずつ解放されます。'],
+          ['📚 思い出の本棚', '店内の右奥の壁にある飾り棚（観葉植物と本が並んだ棚で、淡く光っています）をタップすると「思い出の本棚」が開きます。「常連猫」「VIP猫」「特別なお話」「ご近所さん」の4タブがあり、常連メモの後日談、VIP猫の連続相談（進み具合・結末・思い出バッジの確認と読み返し）、VIP猫同士の掛け合いが描かれる「ペア特別ストーリー」（各組・全7話）を読み返せます。「ご近所さん」タブでは、おすそわけ先のお店の店主紹介と、お店ごとの物語（各3話）が読めます。物語は、そのお店への配達が2回・5回・9回になるごとに1話ずつ解放されます。ペア特別ストーリーは、対象の2匹が解放済みで、仲良し度が両方ともハート3つ以上になると、コインと⭐で購入できます。ショップの「ストーリー」タブからも同じ物語を購入・閲覧できます。'],
           ['🌙 今夜のテーマ', '夜ごとにテーマが変わり、注文の傾向やBGMが少し変わります。雨の夜だけ、雨音が聞こえます。'],
           ['👑 VIP猫', 'めったに来ない特別なお客さまです。連続お悩み相談（全5話）があり、最後まで寄り添うと思い出バッジがもらえます。VIP猫は夜が進むにつれて少しずつ来店するようになります（ずかんのVIP猫タブで「第○夜で解放」と表示されます）。遠方のネコ科VIPは、ショップの「特別招待」で招待できます。'],
           ['💾 セーブについて', '記録は自動でこの端末に保存されます。閉じても、次に開いたとき続きから遊べます。']
