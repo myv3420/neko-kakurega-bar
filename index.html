@@ -348,7 +348,7 @@
       #paintOverlay.open{ display:flex; }
       #paintPop{
         position:relative; width:100%; max-width:360px; max-height:86%;
-        overflow-y:auto;
+        display:flex; flex-direction:column; overflow:hidden;
         background:var(--cream);
         border:3px solid var(--ink); border-radius:18px;
         padding:16px 16px 18px;
@@ -356,6 +356,9 @@
         animation:zukanPopIn .24s cubic-bezier(.34,1.3,.64,1) both;
         text-align:center;
       }
+      /* ずかん詳細ポップと同じく、スクロールは本文側だけに寄せ、
+         ✕がスクロールで流れず常時押せるようにする */
+      #paintPopBody{ flex:1 1 auto; min-height:0; overflow-y:auto; }
       #paintPopClose{
         position:absolute; top:8px; right:8px; z-index:1;
         cursor:pointer; width:36px; height:36px; border-radius:50%;
@@ -966,11 +969,23 @@
         width:100%; max-height:82%; overflow-y:auto;
         background:var(--cream);
         border-top:4px solid var(--ink); border-radius:22px 22px 0 0;
-        padding:14px 14px calc(16px + env(safe-area-inset-bottom));
+        padding:8px 14px calc(16px + env(safe-area-inset-bottom));
         animation:modalUp .28s cubic-bezier(.34,1.3,.64,1) both;
       }
       @keyframes modalUp{ from{ transform:translateY(40px); opacity:.4;} }
-      #modalHead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+      /* 見出し（タイトル＋✕）はスクロールに追従させる：#modal 自体が
+         スクロールコンテナなので、見出しを sticky で上端に固定し、
+         どこまでスクロールしても✕が画面外に流れず常時押せるようにする。
+         見出し帯には地色（クリーム）を敷き、下の本文が透けたり
+         はみ出して見えたりしないようにする。見出し帯の上下 padding と
+         #modal の上 padding・下マージンの合計は従来（上14px／下10px）と
+         同じにしてあり、初期表示の位置と余白は変わらない */
+      #modalHead{
+        position:sticky; top:0; z-index:20;
+        display:flex; align-items:center; justify-content:space-between;
+        margin-bottom:4px; padding:6px 0;
+        background:var(--cream);
+      }
       #modalTitle{ font-size:18px; font-weight:800; display:flex; align-items:center; gap:7px; }
       #modalClose{
         cursor:pointer; width:40px; height:40px; border-radius:50%;
@@ -1069,13 +1084,17 @@
       #zukanPopOverlay.open{ display:flex; }
       #zukanPop{
         position:relative; width:100%; max-width:400px; max-height:82%;
-        overflow-y:auto;
+        display:flex; flex-direction:column; overflow:hidden;
         background:var(--cream);
         border:3px solid var(--ink); border-radius:18px;
         padding:14px 14px 16px;
         box-shadow:0 10px 30px rgba(0,0,0,.45);
         animation:zukanPopIn .24s cubic-bezier(.34,1.3,.64,1) both;
       }
+      /* スクロールは本文側（#zukanPopBody）だけに寄せ、ポップ自体は
+         スクロールさせない。✕（absolute）はポップ基準のまま固定され、
+         本文を下までスクロールしても✕が流れず常時押せる */
+      #zukanPopBody{ flex:1 1 auto; min-height:0; overflow-y:auto; }
       @keyframes zukanPopIn{ from{ transform:scale(.88) translateY(14px); opacity:.3;} }
       #zukanPopClose{
         position:absolute; top:8px; right:8px; z-index:1;
