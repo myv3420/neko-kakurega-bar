@@ -1166,6 +1166,17 @@
       }
       .tk-col{ display:flex; flex-direction:column; align-items:flex-start; min-width:0; }
       .tk-name{ font-size:10.5px; font-weight:800; color:var(--wood); margin:0 0 2px 2px; }
+      /* ペア画面の吹き出しは .tk-col の中にあるため、そのままでは
+         .tk-bub の max-width:76% が「行幅」ではなく「列の幅」基準に
+         なってしまう。列の幅は吹き出し自体の内容幅で決まるので、
+         吹き出しが実質76%×76%ほどに縮み、JS（talkTextHtml）が文節
+         単位で実測して入れた <br> の各行が、さらにブラウザの自動
+         折り返しを受けて文節の途中で切れてしまっていた（例：
+         「その胸の勲／章、」）。列の中では吹き出しが列幅いっぱいまで
+         使えるようにし、幅の上限そのものは JS（renderPair）が
+         行幅の76%を px で直接指定して担保する（連続相談のトーク
+         画面の吹き出しと同じ大きさのまま） */
+      .tk-col .tk-bub{ max-width:100%; }
       /* ペアストーリーのカード（思い出の本棚モーダル／ショップ「ストーリー」
          タブ共通）。金の枠で、通常のショップ行と区別する */
       .pair-card{
@@ -9067,16 +9078,28 @@
       var endView = !ss && pairEnd && pairEnd.pairId === pairView;
       var log = endView ? pairEnd.log : (ss ? ss.log : []);
       var epNow = ss ? ss.ep : (endView ? pairEnd.ep : 1);
-      $('pairEp').textContent = '📚 ペアストーリー 第' + epNow + '話 ／ 『' + def.title + '』';
+      /* タイトル行も連続相談と同じ行割り（文節単位で実測し、自然な
+         切れ目で改行）にする。ブラウザ任せだと題名の途中で割れる */
+      var epText = '📚 ペアストーリー 第' + epNow + '話 ／ 『' + def.title + '』';
+      var headW = $('pairHeadText').clientWidth;
+      $('pairEp').innerHTML = headW > 40
+        ? talkTextHtml(epText, headW - 2, '11px', '700')
+        : escChatHtml(epText);
       var logEl = $('pairLog');
       var rowW = logEl.clientWidth - 20;
-      var bubCap = (rowW > 40 ? rowW * 0.76 : 250) - 30;
+      /* 吹き出しの幅上限は、測定に使った上限（行幅の76%）を px で
+         直接指定する。.tk-bub の max-width:76% のままだと、名前ラベル
+         用の .tk-col の中では列幅基準の % 解決になり、吹き出しが
+         縮んで実測済みの行が文節の途中で再折り返しされてしまうため。
+         大きさ自体は連続相談のトーク画面と同一（行幅の76%） */
+      var bubMaxPx = Math.round(rowW > 40 ? rowW * 0.76 : 250);
+      var bubCap = bubMaxPx - 30;
       logEl.innerHTML = log.map(function(en){
         if (en.w === 'n') return '<div class="rr-note">' + escChatHtml(en.t) + '</div>';
         var html = talkTextHtml(en.t, bubCap, '13.5px', '700');
-        if (en.w === 'm') return '<div class="tk-row me"><div class="tk-bub me">' + html + '</div></div>';
+        if (en.w === 'm') return '<div class="tk-row me"><div class="tk-bub me" style="max-width:' + bubMaxPx + 'px">' + html + '</div></div>';
         var cat = en.w === 'a' ? ca : cb;
-        return '<div class="tk-row"><img class="tk-ava" src="' + cat.frame1 + '" alt=""><div class="tk-col"><div class="tk-name">' + escChatHtml(cat.fixedName) + '</div><div class="tk-bub">' + html + '</div></div></div>';
+        return '<div class="tk-row"><img class="tk-ava" src="' + cat.frame1 + '" alt=""><div class="tk-col"><div class="tk-name">' + escChatHtml(cat.fixedName) + '</div><div class="tk-bub" style="max-width:' + bubMaxPx + 'px">' + html + '</div></div></div>';
       }).join('') + (endView ? '<div class="rr-note">― 第' + epNow + '話 おわり ―</div>' : '');
       var act = $('pairActions');
       var hint = $('pairHint');
