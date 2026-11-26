@@ -2914,9 +2914,18 @@
       });
     }
     var saveTimer = null;
+    /* バックアップ復元・セーブリセットの直後は true にして自動保存を
+       止める。復元では localStorage へ復元データを書いた直後に
+       location.reload() するが、その際 pagehide / visibilitychange の
+       saveNow() が古いメモリ上の state を書き戻し、復元を上書きして
+       しまう（＝確認ダイアログまで正しく出るのに復元できない）ため、
+       書き込み前にこのフラグで全ての保存経路を止める */
+    var saveSuppressed = false;
     function save(){
+      if (saveSuppressed) return;
       clearTimeout(saveTimer);
       saveTimer = setTimeout(function(){
+        if (saveSuppressed) return;
         try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch(e){}
       }, 250);
     }
@@ -2925,7 +2934,7 @@
        隠されたときにも保留中の保存をその場で書き出す（デバウンスの
        250ms の間に閉じると、直前の進行が保存されないため） */
     function saveNow(){
-      if (!state) return;
+      if (!state || saveSuppressed) return;
       clearTimeout(saveTimer);
       saveTimer = null;
       try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch(e){}
@@ -2941,7 +2950,10 @@
        読み込みは新旧どちらの形式も受け付ける。接頭辞・中身の印・
        チェックサム・最低限の構造を検証し、すべて通ったコードだけを
        復元対象にする（不正なコードでは今のセーブを上書きしない）。
-       圧縮・展開は非同期のため、書き出し・読み込みとも Promise を返す */
+       圧縮・展開は非同期のため、書き出し・読み込みとも Promise を返す。
+       NKBR2 の展開は DecompressionStream が無い端末・ブラウザでも
+       復元できるよう、純粋JSの inflate をフォールバックに用意する
+       （端末やブラウザが変わっても復元できるようにするため） */
     var BACKUP_PREFIX = 'NKBR1.';
     var BACKUP_PREFIX2 = 'NKBR2.';
     function backupChecksum(str){
@@ -2987,6 +2999,145 @@
         writer.write(bytes).then(function(){ return writer.close(); }).then(function(){}, reject);
       });
     }
+    /* ---------- 純粋JSの inflate（deflate 展開） ----------
+       DecompressionStream が無い端末・ブラウザ（古い Safari や一部
+       アプリ内ブラウザなど）でも NKBR2 を復元できるようにするための
+       フォールバック。zlib 形式（CompressionStream の出力）と
+       生 deflate の両方に対応する。壊れたデータでは例外を投げる */
+    function inflateBytes(input, startOffset){
+      var out = [];
+      var idx = startOffset || 0;
+      var bitBuf = 0, bitCnt = 0;
+      function bits(n){
+        while (bitCnt < n){
+          if (idx >= input.length) throw new Error('inflate: overrun');
+          bitBuf |= input[idx++] << bitCnt;
+          bitCnt += 8;
+        }
+        var v = bitBuf & ((1 << n) - 1);
+        bitBuf >>>= n; bitCnt -= n;
+        return v;
+      }
+      function buildHuff(lengths){
+        var maxBits = 0, i;
+        for (i = 0; i < lengths.length; i++) if (lengths[i] > maxBits) maxBits = lengths[i];
+        var counts = [];
+        for (i = 0; i <= maxBits; i++) counts.push(0);
+        for (i = 0; i < lengths.length; i++) counts[lengths[i]]++;
+        counts[0] = 0;
+        var offs = [0, 0];
+        for (i = 1; i < maxBits; i++) offs.push(offs[i] + counts[i]);
+        var symbols = new Array(lengths.length);
+        for (i = 0; i < lengths.length; i++) if (lengths[i]) symbols[offs[lengths[i]]++] = i;
+        return { counts: counts, symbols: symbols, maxBits: maxBits };
+      }
+      function decodeHuff(h){
+        var code = 0, first = 0, index = 0;
+        for (var len = 1; len <= h.maxBits; len++){
+          code |= bits(1);
+          var count = h.counts[len];
+          if (code - first < count) return h.symbols[index + (code - first)];
+          index += count;
+          first = (first + count) << 1;
+          code <<= 1;
+        }
+        throw new Error('inflate: bad code');
+      }
+      var LEN_BASE = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
+      var LEN_EXT  = [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
+      var DIST_BASE = [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];
+      var DIST_EXT  = [0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13];
+      var CLEN_ORDER = [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
+      var last = 0;
+      while (!last){
+        last = bits(1);
+        var type = bits(2);
+        if (type === 0){
+          /* 無圧縮ブロック：バイト境界まで読み飛ばしてから丸ごとコピー */
+          bitBuf = 0; bitCnt = 0;
+          if (idx + 4 > input.length) throw new Error('inflate: overrun');
+          var slen = input[idx] | (input[idx + 1] << 8);
+          idx += 4;
+          if (idx + slen > input.length) throw new Error('inflate: overrun');
+          for (var i = 0; i < slen; i++) out.push(input[idx++]);
+        } else if (type === 1 || type === 2){
+          var litH, distH, j;
+          if (type === 1){
+            var fixed = [];
+            for (j = 0; j < 288; j++) fixed.push(j < 144 ? 8 : j < 256 ? 9 : j < 280 ? 7 : 8);
+            litH = buildHuff(fixed);
+            var dfixed = [];
+            for (j = 0; j < 30; j++) dfixed.push(5);
+            distH = buildHuff(dfixed);
+          } else {
+            var hlit = bits(5) + 257, hdist = bits(5) + 1, hclen = bits(4) + 4;
+            var clen = [];
+            for (j = 0; j < 19; j++) clen.push(0);
+            for (j = 0; j < hclen; j++) clen[CLEN_ORDER[j]] = bits(3);
+            var ch = buildHuff(clen);
+            var lens = [], totalLens = hlit + hdist;
+            while (lens.length < totalLens){
+              var sym = decodeHuff(ch);
+              if (sym < 16) lens.push(sym);
+              else if (sym === 16){
+                if (!lens.length) throw new Error('inflate: bad repeat');
+                var prev = lens[lens.length - 1], rep = 3 + bits(2);
+                while (rep-- > 0) lens.push(prev);
+              } else if (sym === 17){ var r17 = 3 + bits(3); while (r17-- > 0) lens.push(0); }
+              else { var r18 = 11 + bits(7); while (r18-- > 0) lens.push(0); }
+            }
+            if (lens.length !== totalLens) throw new Error('inflate: bad lengths');
+            litH = buildHuff(lens.slice(0, hlit));
+            distH = buildHuff(lens.slice(hlit));
+          }
+          while (true){
+            var sym2 = decodeHuff(litH);
+            if (sym2 < 256) out.push(sym2);
+            else if (sym2 === 256) break;
+            else {
+              var li = sym2 - 257;
+              if (li < 0 || li >= LEN_BASE.length) throw new Error('inflate: bad length symbol');
+              var length = LEN_BASE[li] + (LEN_EXT[li] ? bits(LEN_EXT[li]) : 0);
+              var dsym = decodeHuff(distH);
+              if (dsym >= DIST_BASE.length) throw new Error('inflate: bad dist symbol');
+              var dist = DIST_BASE[dsym] + (DIST_EXT[dsym] ? bits(DIST_EXT[dsym]) : 0);
+              var from = out.length - dist;
+              if (from < 0) throw new Error('inflate: bad distance');
+              for (var m = 0; m < length; m++) out.push(out[from + m]);
+            }
+            if (out.length > 8388608) throw new Error('inflate: too large');
+          }
+        } else {
+          throw new Error('inflate: bad block type');
+        }
+      }
+      var result = new Uint8Array(out.length);
+      for (var q = 0; q < out.length; q++) result[q] = out[q];
+      return result;
+    }
+    /* zlib ヘッダ付き（CompressionStream の出力）なら先頭2バイトを
+       飛ばして展開する。判定が外れた場合は生 deflate としても試す */
+    function inflateAuto(bytes){
+      var isZlib = bytes.length > 2 && (bytes[0] & 0x0f) === 8 && ((bytes[0] << 8) + bytes[1]) % 31 === 0;
+      var offsets = isZlib ? [2, 0] : [0, 2];
+      var lastErr = null;
+      for (var i = 0; i < offsets.length; i++){
+        try { return inflateBytes(bytes, offsets[i]); } catch(e){ lastErr = e; }
+      }
+      throw lastErr || new Error('inflate: failed');
+    }
+    /* バイト列 → UTF-8 文字列（TextDecoder が無い環境向けの保険付き） */
+    function utf8BytesToString(bytes){
+      if (typeof TextDecoder !== 'undefined'){
+        return new TextDecoder().decode(bytes);
+      }
+      var bin = '';
+      var CHUNK = 0x8000;
+      for (var i = 0; i < bytes.length; i += CHUNK){
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+      }
+      return decodeURIComponent(escape(bin));
+    }
     /* 書き出し：新形式（圧縮）のコードを Promise で返す。
        圧縮が使えない・失敗した場合は旧形式にフォールバックする */
     function makeBackupCode(){
@@ -3007,10 +3158,18 @@
       }).catch(function(){ return legacyCode(); });
     }
     /* バックアップコードを検証してセーブデータを Promise で返す。
-       不正なら null（新形式 NKBR2. と旧形式 NKBR1. の両方に対応） */
+       不正なら null（新形式 NKBR2. と旧形式 NKBR1. の両方に対応）。
+       NKBR2 の展開は DecompressionStream を優先し、無い環境・失敗時は
+       純粋JSの inflate にフォールバックするので、端末やブラウザが
+       変わっても復元できる。貼り付け時に混入しがちな全角文字・空白・
+       ゼロ幅文字・前後の引用符なども取り除いてから解釈する */
     function parseBackupCode(code){
       if (typeof code !== 'string') return Promise.resolve(null);
-      var s = code.replace(/\s+/g, '');
+      var s = code.replace(/[\s\u200B-\u200D\uFEFF]+/g, '');
+      /* 全角英数字・記号を半角へ（日本語IME経由の貼り付け対策） */
+      s = s.replace(/[\uFF01-\uFF5E]/g, function(ch){
+        return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+      });
       function validate(env){
         if (!env || env.app !== 'nekoKakuregaBar' || env.kind !== 'backup') return null;
         if (!env.data || Object.prototype.toString.call(env.data) !== '[object Object]') return null;
@@ -3018,19 +3177,34 @@
         if (env.sum !== backupChecksum(JSON.stringify(env.data))) return null;
         return env.data;
       }
-      if (s.indexOf(BACKUP_PREFIX2) === 0){
-        if (typeof DecompressionStream === 'undefined' || typeof TextDecoder === 'undefined') return Promise.resolve(null);
-        var comp = null;
-        try { comp = base64UrlToBytes(s.slice(BACKUP_PREFIX2.length)); } catch(e){ return Promise.resolve(null); }
-        return backupTransform(comp, DecompressionStream).then(function(out){
-          var env = null;
-          try { env = JSON.parse(new TextDecoder().decode(out)); } catch(e){ return null; }
-          return validate(env);
-        }).catch(function(){ return null; });
+      function finishBytes(outBytes){
+        if (!outBytes) return null;
+        var env = null;
+        try { env = JSON.parse(utf8BytesToString(outBytes)); } catch(e){ return null; }
+        return validate(env);
       }
-      if (s.indexOf(BACKUP_PREFIX) === 0){
+      /* 接頭辞は文字列の途中からでも探す（前後に文章や引用符が
+         付いたまま貼り付けても読み込めるように） */
+      var i2 = s.search(/NKBR2\./i);
+      if (i2 >= 0){
+        /* 本体は Base64URL の文字だけを拾う（前後のゴミを無視する） */
+        var body = s.slice(i2 + BACKUP_PREFIX2.length).replace(/[^A-Za-z0-9\-_]/g, '');
+        var comp = null;
+        try { comp = base64UrlToBytes(body); } catch(e){ return Promise.resolve(null); }
+        var jsFallback = function(){
+          try { return finishBytes(inflateAuto(comp)); } catch(e){ return null; }
+        };
+        if (typeof DecompressionStream === 'undefined') return Promise.resolve(jsFallback());
+        return backupTransform(comp, DecompressionStream).then(function(out){
+          var v = finishBytes(out);
+          return v !== null ? v : jsFallback();
+        }).catch(function(){ return jsFallback(); });
+      }
+      var i1 = s.search(/NKBR1\./i);
+      if (i1 >= 0){
+        var body1 = s.slice(i1 + BACKUP_PREFIX.length).replace(/[^A-Za-z0-9+/=]/g, '');
         var env1 = null;
-        try { env1 = JSON.parse(decodeURIComponent(escape(atob(s.slice(BACKUP_PREFIX.length))))); } catch(e){ return Promise.resolve(null); }
+        try { env1 = JSON.parse(decodeURIComponent(escape(atob(body1)))); } catch(e){ return Promise.resolve(null); }
         return Promise.resolve(validate(env1));
       }
       return Promise.resolve(null);
@@ -8704,6 +8878,11 @@
             setTimeout(function(){ resetArmed = false; rb.textContent = 'セーブデータをリセット'; rb.style.borderColor = ''; rb.style.color = ''; }, 3000);
             return;
           }
+          /* 削除の直後に自動保存を止めないと、リロード時の pagehide
+             保存が古い state を書き戻してリセットが無効化される */
+          saveSuppressed = true;
+          clearTimeout(saveTimer);
+          saveTimer = null;
           try { localStorage.removeItem(SAVE_KEY); } catch(e){}
           location.reload();
         });
@@ -8793,7 +8972,23 @@
               bkShowMsg('コードが変わっていたため中止しました。今のセーブは変更されていません。', false);
               return;
             }
+            /* 復元データを書く前に自動保存を止める。止めないと、
+               直後の location.reload() で pagehide の saveNow() が
+               古いメモリ上の state を書き戻し、復元が消えてしまう */
+            saveSuppressed = true;
+            clearTimeout(saveTimer);
+            saveTimer = null;
             try { localStorage.setItem(SAVE_KEY, JSON.stringify(data2)); } catch(e){
+              saveSuppressed = false;
+              bkShowMsg('保存に失敗しました。今のセーブは変更されていません。', false);
+              return;
+            }
+            /* 書き込んだ内容を読み返して、復元データが確かに残って
+               いることを確認してから再読み込みする */
+            var written = null;
+            try { written = localStorage.getItem(SAVE_KEY); } catch(e){}
+            if (written !== JSON.stringify(data2)){
+              saveSuppressed = false;
               bkShowMsg('保存に失敗しました。今のセーブは変更されていません。', false);
               return;
             }
