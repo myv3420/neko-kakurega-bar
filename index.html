@@ -1565,7 +1565,7 @@
     }
     function comboKey(c){ return c.base + '+' + c.mixer + '+' + c.snack; }
 
-    /* ---------- レシピ帳（41種） ---------- */
+    /* ---------- レシピ帳（53種） ---------- */
     var RECIPES = [
       { id:'r1', name:'マタタビジントニック', base:'matatabi',  mixer:'soda',  snack:'mint',   price:46, hint:'ソーダとミントで爽やかにゃ…' },
       { id:'r2', name:'マタタビハイボール',   base:'matatabi',  mixer:'soda',  snack:'fish',   price:44, hint:'シュワッと＋お魚チップスにゃ…' },
@@ -1611,7 +1611,22 @@
       { id:'r38', name:'星屑ハニーロック',     base:'hoshikuzu', mixer:'honey',  snack:'katsuo',    price:54, hint:'星屑とはちみつの甘さ、かつお節の香りもにゃ…' },
       { id:'r39', name:'はちみつプラム',       base:'plum',      mixer:'honey',  snack:'popcorn',   price:50, hint:'プラムとはちみつの甘さ、ポップコーンも添えてにゃ…' },
       { id:'r40', name:'レモンコーヒー',       base:'coffee',    mixer:'lemon',  snack:'mint',      price:52, hint:'ほろ苦コーヒーにレモンの酸味、ミントで爽やかにゃ…' },
-      { id:'r41', name:'さくらジンジャー',     base:'sakura',    mixer:'ginger', snack:'starsugar', price:56, hint:'さくらの香りにジンジャーの刺激、星屑もキラリにゃ…' }
+      { id:'r41', name:'さくらジンジャー',     base:'sakura',    mixer:'ginger', snack:'starsugar', price:56, hint:'さくらの香りにジンジャーの刺激、星屑もキラリにゃ…' },
+      /* 追加レシピ第3弾（r42〜r53）：レシピの少ないベース（さくら／プラム／
+         ゆず）と割材（ヨーグルト／ジンジャー）を中心に配分。トニック／
+         オリーブを使うものは、その素材の解放が条件（従来どおり） */
+      { id:'r42', name:'花あかりヨーグルト',   base:'sakura',    mixer:'yogurt', snack:'cheese',    price:52, hint:'さくらの香りとまろやかヨーグルト、チーズのコクにゃ…' },
+      { id:'r43', name:'花吹雪スカッシュ',     base:'sakura',    mixer:'lemon',  snack:'mint',      price:50, hint:'さくらとレモンの爽やかさ、ミントも添えてにゃ…' },
+      { id:'r44', name:'花蜜さくらロック',     base:'sakura',    mixer:'honey',  snack:'fish',      price:53, hint:'さくらとはちみつの甘さ、お魚チップスもにゃ…' },
+      { id:'r45', name:'星屑プラムパフェ',     base:'plum',      mixer:'yogurt', snack:'starsugar', price:54, hint:'プラムとヨーグルトに星屑シュガーを散らしてにゃ…' },
+      { id:'r46', name:'プラムトニック',       base:'plum',      mixer:'tonic',  snack:'mint',      price:60, hint:'プラムをトニックで割って、ミントの香りにゃ…' },
+      { id:'r47', name:'月影プラムベリー',     base:'plum',      mixer:'berry',  snack:'olive',     price:58, hint:'プラムとベリーの甘酸っぱさに、オリーブの塩気にゃ…' },
+      { id:'r48', name:'ゆずジンジャー割り',   base:'yuzu',      mixer:'ginger', snack:'katsuo',    price:60, hint:'ゆずにジンジャーの刺激、かつお節の香りもにゃ…' },
+      { id:'r49', name:'ゆずヨーグルトポップ', base:'yuzu',      mixer:'yogurt', snack:'popcorn',   price:59, hint:'ゆずとヨーグルトのまろやかさ、ポップコーンも添えてにゃ…' },
+      { id:'r50', name:'夜更けのジンジャーコーヒー', base:'coffee', mixer:'ginger', snack:'cheese', price:54, hint:'ほろ苦コーヒーにジンジャーの刺激、チーズを添えてにゃ…' },
+      { id:'r51', name:'月あかりミルクサワー', base:'milk',      mixer:'lemon',  snack:'katsuo',    price:44, hint:'ミルクにレモンの酸味、かつお節の香りもにゃ…' },
+      { id:'r52', name:'まろやかマタタビ割り', base:'matatabi',  mixer:'yogurt', snack:'olive',     price:58, hint:'マタタビとヨーグルトのまろやかさ、オリーブを添えてにゃ…' },
+      { id:'r53', name:'星屑ジンジャーフィズ', base:'hoshikuzu', mixer:'ginger', snack:'fish',      price:55, hint:'星屑にジンジャーの刺激、お魚チップスもにゃ…' }
     ];
     /* ---------- 特別レシピ（ショップで星⭐を払って解放） ----------
        高価格帯の特別メニュー。解放するまでメニューにも注文にも出ない。
