@@ -594,17 +594,20 @@
          絶対に割れないようにする。幅は全席共通で本文に合う
          fit-content（最大170px）。それでもドリンク名がはみ出す場合は
          JS（fitOrderBubble）がフォントを少し縮めて収める。
-         例外はお悩み相談とこだわり注文の吹き出し：文章が折り返すと
-         箱が最大幅いっぱいに広がり、本文の左右に大きな空白が残って
-         しまうため、JS（fitTextBubbleWidth）が行数が増えない範囲で
+         例外はお悩み相談・こだわり注文・きまぐれ注文の吹き出し：
+         文章やヘッダーのピル類が折り返すと箱が最大幅いっぱいに
+         広がり、本文の左右に大きな空白が残ってしまうため、
+         JS（fitTextBubbleWidth）が行数が増えない範囲で
          横幅を本文の長さにフィットさせ、左右の無駄な余白をなくす。
          ただし下限は「本文の一番長い行が収まる幅」で、本文の行が
          右端からはみ出すことはない。こだわり注文の材料名の並びは
          「×」の直後でのみ改行でき（specialOrderHtml の <wbr>）、
          最大幅で1行に収まらない場合はそこで改行したうえで、
          改行後の各行が収まる幅にフィットする。材料名そのものは
-         途中で割れない。
-         他の注文（通常・きまぐれ等）も CSS の fit-content で
+         途中で割れない（材料名と直後の「 × 」を1つの nowrap
+         ユニットにし、改行可能ポイントはその直後だけに置くため、
+         「×」が行頭に来る折り返しも起こらない）。
+         他の注文（通常等）も CSS の fit-content で
          本文幅に収まる（この処理は通らない）。
          端の席で
          吹き出しがステージ外にはみ出しそうなときも JS が横位置を
@@ -5294,9 +5297,17 @@
        nowrap のままなので、名前の途中で割れることはない */
     function specialOrderHtml(reqs, fallback){
       if (!reqs || !reqs.length) return fallback;
-      var names = reqs.map(function(r){ return '<span class="ob-nw">' + ingName(r.kind, r.id) + '</span>'; });
-      if (names.length === 1) return '「' + names[0] + '」<span class="ob-nw">を使ってほしいにゃ</span>';
-      return names.join('<span class="ob-nw"> × </span><wbr>') + '<span class="ob-nw">でお願いにゃ</span>';
+      var raw = reqs.map(function(r){ return ingName(r.kind, r.id); });
+      if (raw.length === 1) return '<span class="ob-nw">「' + raw[0] + '」</span><span class="ob-nw">を使ってほしいにゃ</span>';
+      /* 材料名とその直後の「 × 」を1つの nowrap ユニットにまとめ、
+         改行可能ポイント（<wbr>）はその直後だけに置く。材料名と
+         「×」を別々の span に分けると、両者の境目でも改行できて
+         しまい「×」が行頭に来る折り返しが起こりうるため、区切りは
+         必ず「（材料名） ×」の後ろだけになるようユニット化する */
+      var units = raw.map(function(n, i){
+        return '<span class="ob-nw">' + n + (i < raw.length - 1 ? ' × </span><wbr>' : '</span>');
+      });
+      return units.join('') + '<span class="ob-nw">でお願いにゃ</span>';
     }
     /* 吹き出しの表示調整：端の席でステージ外にはみ出しそうなら横位置を
        クランプし、しっぽ（--tx）が猫の真上を指し続けるよう補正する。
@@ -5326,8 +5337,8 @@
       for (var k = 0; k < lines.length; k++) m = Math.max(m, lines[k].w);
       return m;
     }
-    /* お悩み相談とこだわり注文の吹き出しは、横幅を本文の長さに
-       フィットさせる。
+    /* お悩み相談・こだわり注文・きまぐれ注文の吹き出しは、横幅を
+       本文の長さにフィットさせる。
        文章が折り返す吹き出しは箱が最大幅（42%）いっぱいに広がり、
        中央寄せの本文の左右に大きな空白が残る。そこで、最大幅で
        表示したときの高さ（＝行数）を保てる範囲で幅を少しずつ
@@ -5344,7 +5355,7 @@
        広げ直す。これが実質的な下限（＝本文の一番長い行が
        収まる幅）になり、余白を詰める効果は保ったまま、
        セリフのはみ出しだけを防ぐ。他の注文吹き出し
-       （通常・きまぐれ等）は元の大きさのままで、この処理は通らない */
+       （通常等）は元の大きさのままで、この処理は通らない */
     function fitTextBubbleWidth(b, layerW){
       /* 全ての席の吹き出しは CSS の上限（170px）を最大幅として
          フィットさせる（中央・左右で扱いを変えない） */
@@ -5380,7 +5391,7 @@
     function fitOrderBubble(b, occ){
       var layerW = orderLayer.clientWidth;
       if (!layerW) return;
-      if (b.classList.contains('consult') || b.classList.contains('special')) fitTextBubbleWidth(b, layerW);
+      if (b.classList.contains('consult') || b.classList.contains('special') || b.classList.contains('whim')) fitTextBubbleWidth(b, layerW);
       var bw = b.offsetWidth;
       if (!bw) return;
       var cxPx = SEATS[occ.seatIdx].cx / 100 * layerW;
