@@ -1021,7 +1021,8 @@
         border-color:var(--ink); text-shadow:0 1px 0 rgba(74,53,37,.4); box-shadow:0 3px 0 var(--ink);
       }
       .zukan-tab:focus-visible{ outline:3px solid var(--accent); outline-offset:2px; }
-      /* ずかん「バッジ」タブ：思い出バッジの鑑賞カード */
+      /* 思い出の本棚「VIP猫」タブ：連続相談の記録・思い出バッジの鑑賞カード
+         （旧・ずかん「バッジ」タブのカードを本棚へ集約したもの） */
       .badge-cat{
         background:#fff; border:2px solid #E4D2AC; border-radius:14px;
         padding:10px 12px; margin-bottom:10px;
@@ -1036,7 +1037,9 @@
       }
       .badge-chip.locked{ background:#EFE9DC; border-color:#CBBFA5; color:#A5936F; }
       .badge-ending{ font-size:11px; font-weight:700; color:var(--wood-dark); margin-top:6px; line-height:1.6; }
-      .reread-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+      .reread-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center; }
+      /* 本棚「常連猫」タブ：後日談カード内の各話タイトル */
+      .memo-ep-title{ font-size:12.5px; font-weight:800; color:var(--wood-dark); }
       .reread-btn{
         cursor:pointer; font-family:inherit; font-weight:800; font-size:12px;
         border-radius:999px; padding:5px 12px; min-height:34px;
@@ -1423,11 +1426,12 @@
             <span class="board-badge" id="boardBadge" style="display:none">!</span>
           </button>
           <!-- 思い出の本棚：右奥の壁の飾り棚（観葉植物と本・瓶のウォール
-               シェルフ）のタップエリア。VIPペア特別ストーリーのモーダルが
-               開く。棚の形に切り抜いた光のレイヤー（#shelfGlow）の明滅で、
-               タップできる場所だと分かるようにする。文字ラベルは置かない -->
+               シェルフ）のタップエリア。思い出の本棚モーダル（常連猫／
+               VIP猫／特別なお話の3タブ）が開く。棚の形に切り抜いた光の
+               レイヤー（#shelfGlow）の明滅で、タップできる場所だと
+               分かるようにする。文字ラベルは置かない -->
           <div id="shelfGlow" aria-hidden="true"><img src="data:image/webp;base64,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" alt="" /></div>
-          <button id="shelfProp" type="button" aria-label="思い出の本棚を開く" title="思い出の本棚（VIPペア特別ストーリー）"></button>
+          <button id="shelfProp" type="button" aria-label="思い出の本棚を開く" title="思い出の本棚"></button>
         </div>
         <div id="toast" role="status"></div>
         <div id="bigBanner" aria-hidden="true">大成功！</div>
@@ -6828,6 +6832,62 @@
         });
       });
     }
+    /* ---------- 常連メモ（通常猫の連載）の後日談の読み返し ----------
+       解決済み話数は掲示板の storyNext（次話番号）から復元する。
+       完走済みシリーズは再出現で storyNext が 1 に戻るため、完走の
+       記録（storyDone）がある場合は全話解決扱いにする（ずかん詳細の
+       後日談表示と同じ判定）。進行データの形式は従来どおり */
+    function memoSolvedEps(key){
+      var mst = (typeof MEMO_STORIES !== 'undefined') ? MEMO_STORIES[key] : null;
+      if (!mst) return 0;
+      var b = boardState();
+      var n = Math.min((b.storyNext[key] || 1) - 1, mst.eps.length);
+      if ((b.storyDone || {})[key]) n = mst.eps.length;
+      return Math.max(0, n);
+    }
+    /* 解決済みの話だけ、VIP連続相談と同じ読み返し画面（トークUI）で
+       読み直せる。本文（相談）→一杯→解決のひとこと→後日談（ト書き）
+       の順に、MEMO_STORIES の文面からそのまま再構成する */
+    function openMemoReread(key, epIdx){
+      var mst = (typeof MEMO_STORIES !== 'undefined') ? MEMO_STORIES[key] : null;
+      if (!mst) return;
+      var ep = mst.eps[epIdx];
+      if (!ep) return;
+      if (epIdx >= memoSolvedEps(key)) return; /* 未解決の話は読めない */
+      var cat = catById(mst.catId);
+      var lab = memoCatLabel(mst.catId);
+      var entries = [
+        { w:'c', t: ep.text },
+        { w:'n', t: '🍸 一杯を出した' },
+        { w:'c', t: ep.solve }
+      ];
+      if (ep.after){
+        entries.push({ w:'n', t: '📖 後日談' });
+        entries.push({ w:'n', t: ep.after });
+      }
+      $('rereadAva').src = cat ? cat.frame1 : '';
+      $('rereadName').innerHTML = escChatHtml(lab.name) +
+        (lab.breed ? '<span class="tk-nw">（' + escChatHtml(lab.breed) + '）</span>' : '');
+      $('rereadEp').textContent = '📖 読み返し 常連メモ「' + mst.title + '」第' + (epIdx + 1) + '話「' + ep.title + '」';
+      $('rereadOverlay').classList.add('open');
+      var log = $('rereadLog');
+      var rowW = log.clientWidth - 20;
+      var bubCap = (rowW > 40 ? rowW * 0.76 : 250) - 30;
+      log.innerHTML = entries.map(function(en){
+        if (en.w === 'n') return '<div class="rr-note">' + escChatHtml(en.t) + '</div>';
+        var html = talkTextHtml(en.t, bubCap, '13.5px', '700');
+        return '<div class="tk-row"><img class="tk-ava" src="' + (cat ? cat.frame1 : '') + '" alt=""><div class="tk-bub">' + html + '</div></div>';
+      }).join('') + '<div class="rr-note">― 第' + (epIdx + 1) + '話 おわり ―</div>';
+      log.scrollTop = 0;
+    }
+    function wireMemoRereadButtons(root){
+      root.querySelectorAll('[data-memo-reread]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var parts = b.getAttribute('data-memo-reread').split(':');
+          openMemoReread(parts[0], parseInt(parts[1], 10));
+        });
+      });
+    }
     /* 現在のステップを1つ処理する（セリフはログに積み、操作ステップで止まる） */
     function talkProcess(){
       var occ = talkOcc();
@@ -9050,6 +9110,10 @@
     var inviteConfirm = null;
     /* ショップモーダル内のタブ：'invite'＝特別招待／'recipe'＝特別レシピ／'story'＝ペア特別ストーリー */
     var shopTab = 'invite';
+    /* 思い出の本棚モーダル内のタブ：'regular'＝常連猫（常連メモの後日談）／
+       'vip'＝VIP猫（連続相談の記録・読み返し）／'pair'＝特別なお話
+       （VIPペア特別ストーリー）。開いた直後は従来どおりペア物語から */
+    var shelfTab = 'pair';
     /* 設定モーダル内のタブ：'sound'＝サウンド（BGMのON／OFF・音量）／'save'＝セーブ（クラウドセーブ・バックアップ・リセット） */
     var settingsTab = 'sound';
     function inviteDef(catId){
@@ -9072,7 +9136,8 @@
         '席が空いたタイミング（または次の夜）に、必ず会いに来てくれます。連続相談の第1話も始まります');
     }
     var zukanSel = null;
-    /* ずかんモーダル内のタブ：'cat'＝猫図鑑（通常種）／'vip'＝VIP猫／'ing'＝素材一覧／'badge'＝思い出バッジ鑑賞 */
+    /* ずかんモーダル内のタブ：'cat'＝猫図鑑（通常種）／'vip'＝VIP猫／'ing'＝素材一覧
+       （思い出バッジの鑑賞と物語の読み返しは「思い出の本棚」へ集約した） */
     var zukanTab = 'cat';
     /* 掲示板モーダル内のタブ：'share'＝おすそわけ（依頼＋逆おすそわけ）／'memo'＝常連メモ／'thanks'＝お礼の張り紙 */
     var boardTab = 'share';
@@ -9092,7 +9157,7 @@
     function openModal(kind){
       currentModal = kind;
       if (kind === 'menu') menuBase = null; /* メニューを開いたら必ずベース選択から */
-      var titles = { menu:'メニュー（レシピ帳）', zukan:'ずかん（猫図鑑）', restock:'補充（材料の仕入れ）', shop:'ショップ', shelf:'思い出の本棚（VIPペア特別ストーリー）', settings:'設定', help:'遊び方', settle:'今夜の営業お疲れさま精算', board:'お店の掲示板', pick:'' };
+      var titles = { menu:'メニュー（レシピ帳）', zukan:'ずかん（猫図鑑）', restock:'補充（材料の仕入れ）', shop:'ショップ', shelf:'思い出の本棚', settings:'設定', help:'遊び方', settle:'今夜の営業お疲れさま精算', board:'お店の掲示板', pick:'' };
       $('modalTitle').textContent = kind === 'pick' ? (CAT_LABEL[pickKind] + 'を選ぶ') : titles[kind];
       /* 精算モーダルは「次の夜へ」でだけ閉じられるよう、✕ボタンを隠す */
       $('modalClose').style.display = (kind === 'settle') ? 'none' : '';
@@ -9293,7 +9358,6 @@
           '<button class="zukan-tab' + (zukanTab === 'cat' ? ' on' : '') + '" data-ztab="cat" type="button">🐱 猫</button>' +
           '<button class="zukan-tab' + (zukanTab === 'vip' ? ' on' : '') + '" data-ztab="vip" type="button">👑 VIP猫</button>' +
           '<button class="zukan-tab' + (zukanTab === 'ing' ? ' on' : '') + '" data-ztab="ing" type="button">🍸 素材</button>' +
-          '<button class="zukan-tab' + (zukanTab === 'badge' ? ' on' : '') + '" data-ztab="badge" type="button">🏅 バッジ</button>' +
           '</div>';
         if (zukanTab === 'ing'){
           /* 素材タブ：全素材をカテゴリ別に。味チップは判定と同一の
@@ -9317,47 +9381,6 @@
             });
           });
           body.innerHTML = htmlI;
-        } else if (zukanTab === 'badge'){
-          /* バッジタブ：全VIP（招待組含む）の思い出バッジ鑑賞。
-             獲得済みは猫の名前・物語タイトル・結末とともに並べ、
-             未獲得は「？？？」で存在だけ示す。到達済みの話は
-             「読み返し」ボタンからトーク画面風に読み直せる */
-          var badgeCats = CAT_MASTER.filter(function(c){ return c.vip && c.fixedName && typeof STORIES !== 'undefined' && STORIES[c.id]; });
-          var totalBadges = 0, ownedBadges = 0;
-          badgeCats.forEach(function(c){
-            ['great','cozy','calm'].forEach(function(k){ if (STORIES[c.id].endings[k]) totalBadges++; });
-            var stb = (state.stories && state.stories[c.id]) || null;
-            if (stb && stb.badges) ownedBadges += stb.badges.length;
-          });
-          var htmlB = tabsHtml;
-          htmlB += '<p class="modal-note">集めた思い出バッジ ' + ownedBadges + ' / ' + totalBadges + ' 個。VIP猫の連続相談を完結すると、その結末のバッジがもらえます。到達した話は「読み返し」でいつでも読み直せます。</p>';
-          badgeCats.forEach(function(c){
-            var stb = (state.stories && state.stories[c.id]) || { ep:1, done:false, badges:[], endings:[] };
-            var uninvited = c.inviteOnly && state.invited.indexOf(c.id) === -1;
-            /* 家猫VIPの段階解放：未解放の間は名前・物語とも伏せる
-               （出会ったことのあるVIPは保護により常に表示される） */
-            var nightLocked = !uninvited && !isVipNightUnlocked(c);
-            var vipHidden = uninvited || nightLocked;
-            var reached = vipHidden ? 0 : storyReachedEp(c.id);
-            htmlB += '<div class="badge-cat vip">' +
-              '<div class="badge-cat-head">' + (vipHidden ? '？？？' : '👑 ' + c.fixedName + '（' + c.breed + '）') + '</div>' +
-              '<div class="badge-cat-sub">📖 連続相談「' + (vipHidden ? '？？？' : STORIES[c.id].title) + '」' + (uninvited ? '／未招待（ショップの「特別招待」から招待状を送れます）' : (nightLocked ? '／第' + c.unlockNight + '夜で解放されます' : (stb.done ? '／全5話 完結！' : (reached > 0 ? '／第' + reached + '話まで到達' : '／まだ始まっていません')))) + '</div>' +
-              '<div class="badge-chips">' + ['great','cozy','calm'].map(function(k){
-                var ed = STORIES[c.id].endings[k];
-                if (!ed) return '';
-                var owned = stb.badges && stb.badges.indexOf(ed.badge) !== -1;
-                return '<span class="badge-chip' + (owned ? '' : ' locked') + '">' + (owned ? ed.badge : '🔒 ？？？') + '</span>';
-              }).join('') + '</div>' +
-              ((stb.endings && stb.endings.length) ? '<div class="badge-ending">到達した結末：' + stb.endings.map(function(k){ return STORIES[c.id].endings[k] ? STORIES[c.id].endings[k].name : k; }).join('／') + '</div>' : '') +
-              '<div class="reread-row">' + [1,2,3,4,5].map(function(ep){
-                return ep <= reached
-                  ? '<button class="reread-btn" data-reread="' + c.id + ':' + ep + '" type="button">📖 第' + ep + '話を読み返す</button>'
-                  : '<button class="reread-btn" disabled type="button">第' + ep + '話 🔒</button>';
-              }).join('') + '</div>' +
-              '</div>';
-          });
-          body.innerHTML = htmlB;
-          wireRereadButtons(body);
         } else {
           /* 猫タブ＝通常種のみ／VIP猫タブ＝VIP猫のみ（王冠つき）。
              コンプリート数（バッジの ○/26種）は全種合計のまま */
@@ -9476,13 +9499,96 @@
         });
       }
       if (currentModal === 'shelf'){
-        /* 思い出の本棚：壁の飾り棚タップで開く、VIPペア特別ストーリーの
-           本棚。ショップの「ストーリー」タブとカード・購入・閲覧の
-           データは共通（pairCardHtml／state.pairStories） */
-        var htmlBk = '<p class="modal-note">コイン： ' + state.coins + ' ／ 星⭐： ' + state.stars + ' ／ VIP猫同士の特別な物語が並ぶ、思い出の本棚です。対象の2匹が解放済みで、仲良し度が両方ともハート3つ以上になると、コインと⭐で購入できます。</p>';
-        PAIR_STORIES.forEach(function(def){ htmlBk += pairCardHtml(def); });
+        /* 思い出の本棚：壁の飾り棚タップで開く、物語の読み返しの集約先。
+           3タブ構成：「常連猫」＝通常猫の常連メモ後日談（解決済みの話）、
+           「VIP猫」＝VIP猫の連続相談の記録と読み返し（旧・ずかんの
+           「バッジ」タブの内容）、「特別なお話」＝VIPペア特別ストーリー
+           （ショップの「ストーリー」タブとカード・購入・閲覧のデータは
+           共通：pairCardHtml／state.pairStories） */
+        var htmlBk = '<div class="zukan-tabs" role="tablist">' +
+          '<button class="zukan-tab' + (shelfTab === 'regular' ? ' on' : '') + '" data-shelftab="regular" type="button">🐱 常連猫</button>' +
+          '<button class="zukan-tab' + (shelfTab === 'vip' ? ' on' : '') + '" data-shelftab="vip" type="button">👑 VIP猫</button>' +
+          '<button class="zukan-tab' + (shelfTab === 'pair' ? ' on' : '') + '" data-shelftab="pair" type="button">📚 特別なお話</button>' +
+          '</div>';
+        if (shelfTab === 'regular'){
+          /* 常連猫タブ：常連メモの連載で解決済みの話だけを、猫（シリーズ）
+             ごとに並べる。未解決の話は出さない */
+          htmlBk += '<p class="modal-note">掲示板の「常連メモ」で解決したお話の後日談が、猫ごとに並びます。「読み返す」を押すと、その夜のやりとりと後日談をトーク画面で読み直せます。</p>';
+          var anyMemoStory = false;
+          Object.keys(MEMO_STORIES).forEach(function(key){
+            var mst = MEMO_STORIES[key];
+            var solved = memoSolvedEps(key);
+            if (solved <= 0) return;
+            anyMemoStory = true;
+            var lab = memoCatLabel(mst.catId);
+            htmlBk += '<div class="badge-cat">' +
+              '<div class="badge-cat-head">' + lab.name + (lab.breed ? '（' + lab.breed + '）' : '') + '</div>' +
+              '<div class="badge-cat-sub">📖 常連メモ「' + mst.title + '」／' + solved + '／' + mst.eps.length + '話 解決' + (solved >= mst.eps.length ? '・完結！' : '') + '</div>' +
+              mst.eps.slice(0, solved).map(function(ep, i){
+                return '<div class="reread-row"><span class="memo-ep-title">第' + (i + 1) + '話「' + ep.title + '」</span>' +
+                  '<button class="reread-btn" data-memo-reread="' + key + ':' + i + '" type="button">📖 読み返す</button></div>';
+              }).join('') +
+              '</div>';
+          });
+          if (!anyMemoStory){
+            htmlBk += '<p class="modal-note">まだ読み返せる後日談がありません。掲示板の「常連メモ」を解決すると、そのお話の後日談がここに並びます。</p>';
+          }
+        } else if (shelfTab === 'vip'){
+          /* VIP猫タブ：全VIP（招待組含む）の連続相談の記録。進み具合・
+             到達した結末・思い出バッジの所持状況を示し、到達済みの話は
+             「読み返し」ボタンからトーク画面風に読み直せる
+             （旧・ずかん「バッジ」タブの内容をそのまま移したもの） */
+          var badgeCats = CAT_MASTER.filter(function(c){ return c.vip && c.fixedName && typeof STORIES !== 'undefined' && STORIES[c.id]; });
+          var totalBadges = 0, ownedBadges = 0;
+          badgeCats.forEach(function(c){
+            ['great','cozy','calm'].forEach(function(k){ if (STORIES[c.id].endings[k]) totalBadges++; });
+            var stb = (state.stories && state.stories[c.id]) || null;
+            if (stb && stb.badges) ownedBadges += stb.badges.length;
+          });
+          htmlBk += '<p class="modal-note">集めた思い出バッジ ' + ownedBadges + ' / ' + totalBadges + ' 個。VIP猫の連続相談を完結すると、その結末のバッジがもらえます。到達した話は「読み返し」でいつでも読み直せます。</p>';
+          badgeCats.forEach(function(c){
+            var stb = (state.stories && state.stories[c.id]) || { ep:1, done:false, badges:[], endings:[] };
+            var uninvited = c.inviteOnly && state.invited.indexOf(c.id) === -1;
+            /* 家猫VIPの段階解放：未解放の間は名前・物語とも伏せる
+               （出会ったことのあるVIPは保護により常に表示される） */
+            var nightLocked = !uninvited && !isVipNightUnlocked(c);
+            var vipHidden = uninvited || nightLocked;
+            var reached = vipHidden ? 0 : storyReachedEp(c.id);
+            htmlBk += '<div class="badge-cat vip">' +
+              '<div class="badge-cat-head">' + (vipHidden ? '？？？' : '👑 ' + c.fixedName + '（' + c.breed + '）') + '</div>' +
+              '<div class="badge-cat-sub">📖 連続相談「' + (vipHidden ? '？？？' : STORIES[c.id].title) + '」' + (uninvited ? '／未招待（ショップの「特別招待」から招待状を送れます）' : (nightLocked ? '／第' + c.unlockNight + '夜で解放されます' : (stb.done ? '／全5話 完結！' : (reached > 0 ? '／第' + reached + '話まで到達' : '／まだ始まっていません')))) + '</div>' +
+              '<div class="badge-chips">' + ['great','cozy','calm'].map(function(k){
+                var ed = STORIES[c.id].endings[k];
+                if (!ed) return '';
+                var owned = stb.badges && stb.badges.indexOf(ed.badge) !== -1;
+                return '<span class="badge-chip' + (owned ? '' : ' locked') + '">' + (owned ? ed.badge : '🔒 ？？？') + '</span>';
+              }).join('') + '</div>' +
+              ((stb.endings && stb.endings.length) ? '<div class="badge-ending">到達した結末：' + stb.endings.map(function(k){ return STORIES[c.id].endings[k] ? STORIES[c.id].endings[k].name : k; }).join('／') + '</div>' : '') +
+              '<div class="reread-row">' + [1,2,3,4,5].map(function(ep){
+                return ep <= reached
+                  ? '<button class="reread-btn" data-reread="' + c.id + ':' + ep + '" type="button">📖 第' + ep + '話を読み返す</button>'
+                  : '<button class="reread-btn" disabled type="button">第' + ep + '話 🔒</button>';
+              }).join('') + '</div>' +
+              '</div>';
+          });
+        } else {
+          /* 特別なお話タブ：VIPペア特別ストーリー（従来の本棚の内容） */
+          htmlBk += '<p class="modal-note">コイン： ' + state.coins + ' ／ 星⭐： ' + state.stars + ' ／ VIP猫同士の特別な物語が並ぶ、本棚です。対象の2匹が解放済みで、仲良し度が両方ともハート3つ以上になると、コインと⭐で購入できます。</p>';
+          PAIR_STORIES.forEach(function(def){ htmlBk += pairCardHtml(def); });
+        }
         body.innerHTML = htmlBk;
-        wirePairCards(body);
+        /* 本棚内タブの切り替え（常連猫／VIP猫／特別なお話） */
+        body.querySelectorAll('[data-shelftab]').forEach(function(b){
+          b.addEventListener('click', function(){
+            shelfTab = b.getAttribute('data-shelftab');
+            pairConfirm = null;
+            renderModalBody();
+            $('modal').scrollTop = 0;
+          });
+        });
+        if (shelfTab === 'regular') wireMemoRereadButtons(body);
+        if (shelfTab === 'vip') wireRereadButtons(body);
+        if (shelfTab === 'pair') wirePairCards(body);
       }
       if (currentModal === 'shop'){
         /* ショップ：3タブ構成。「招待」＝コインで遠方のネコ科VIPへ招待状、
@@ -9782,9 +9888,9 @@
           ['📝 注文の種類', 'ふつうの注文のほか、味のヒントが出る「きまぐれ」、使う材料が指定される「こだわり」、味が合うと解決する「お悩み相談」があります。条件に合うドリンクをトレイに載せると、その猫が光って教えてくれます。'],
           ['🍋 味の相性', '材料にはそれぞれ「甘い」「すっきり」「ほろ苦い」などの味があります。ずかんの「素材」タブでいつでも確認できます。'],
           ['🪙 コインと⭐', 'ドリンクを提供するとコインと⭐が貯まります。今夜のにぎわいゲージが満ちると精算になり、その夜のノルマを達成すると⭐ボーナスがもらえます。'],
-          ['🔘 下の4つのボタン', '「メニュー」はレシピ帳で、発見したレシピはタップするとそのまま作れます。「ずかん」は猫・VIP猫・素材・バッジの図鑑で、物語の読み返しもここから。「補充」はコインで材料を買い足す場所で、レア材料の解放もできます。「ショップ」には「招待」「レシピ」「ストーリー」の3タブがあり、コインで特別招待（遠方のネコ科VIPを招くこと）、⭐で特別レシピ、コインと⭐でペア特別ストーリーを解放できます。'],
+          ['🔘 下の4つのボタン', '「メニュー」はレシピ帳で、発見したレシピはタップするとそのまま作れます。「ずかん」は猫・VIP猫・素材の図鑑です。「補充」はコインで材料を買い足す場所で、レア材料の解放もできます。「ショップ」には「招待」「レシピ」「ストーリー」の3タブがあり、コインで特別招待（遠方のネコ科VIPを招くこと）、⭐で特別レシピ、コインと⭐でペア特別ストーリーを解放できます。'],
           ['📌 お店の掲示板', 'カウンター右端の掲示板をタップすると、近所のお店との「おすそわけ」や、常連猫のメモなどのお知らせが見られます。'],
-          ['📚 思い出の本棚', '店内の右奥の壁にある飾り棚（観葉植物と本が並んだ棚で、淡く光っています）をタップすると「思い出の本棚」が開きます。VIP猫同士の掛け合いが描かれる「ペア特別ストーリー」（各組・全7話）が並んでいて、対象の2匹が解放済みで、仲良し度が両方ともハート3つ以上になると、コインと⭐で購入できます。ショップの「ストーリー」タブからも同じ物語を購入・閲覧できます。'],
+          ['📚 思い出の本棚', '店内の右奥の壁にある飾り棚（観葉植物と本が並んだ棚で、淡く光っています）をタップすると「思い出の本棚」が開きます。「常連猫」「VIP猫」「特別なお話」の3タブがあり、常連メモの後日談、VIP猫の連続相談（進み具合・結末・思い出バッジの確認と読み返し）、VIP猫同士の掛け合いが描かれる「ペア特別ストーリー」（各組・全7話）を読み返せます。ペア特別ストーリーは、対象の2匹が解放済みで、仲良し度が両方ともハート3つ以上になると、コインと⭐で購入できます。ショップの「ストーリー」タブからも同じ物語を購入・閲覧できます。'],
           ['🌙 今夜のテーマ', '夜ごとにテーマが変わり、注文の傾向やBGMが少し変わります。雨の夜だけ、雨音が聞こえます。'],
           ['👑 VIP猫', 'めったに来ない特別なお客さまです。連続お悩み相談（全5話）があり、最後まで寄り添うと思い出バッジがもらえます。VIP猫は夜が進むにつれて少しずつ来店するようになります（ずかんのVIP猫タブで「第○夜で解放」と表示されます）。遠方のネコ科VIPは、ショップの「特別招待」で招待できます。'],
           ['💾 セーブについて', '記録は自動でこの端末に保存されます。閉じても、次に開いたとき続きから遊べます。']
