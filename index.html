@@ -1265,6 +1265,20 @@
       .backup-msg{ margin:8px 0 0; font-size:12px; font-weight:700; line-height:1.5; display:none; }
       .backup-msg.ok{ display:block; color:#4E7A3A; }
       .backup-msg.err{ display:block; color:#C23B22; }
+      /* クラウドセーブ欄：合言葉入力欄と自動保存トグルの行。
+         バックアップ欄と同じカードの見た目にそろえる */
+      .cloud-pass{
+        width:100%; box-sizing:border-box; margin-top:8px;
+        border:2px solid #D8C39A; border-radius:10px; background:#FFFBF0;
+        padding:9px 10px; font-family:inherit; font-size:14px; color:var(--ink);
+        min-height:44px;
+      }
+      .cloud-auto-row{
+        display:flex; align-items:center; gap:8px; margin-top:10px;
+        font-size:12.5px; font-weight:800; color:var(--wood-dark);
+      }
+      .cloud-auto-row .vol-toggle{ margin-left:auto; }
+      .backup-btn:disabled{ opacity:.55; cursor:default; }
       /* 設定モーダル：音量スライダー */
       .vol-group{
         background:#fff; border:2px solid #E4D2AC; border-radius:14px;
@@ -3251,6 +3265,126 @@
         return Promise.resolve(validate(env1));
       }
       return Promise.resolve(null);
+    }
+    /* ---------- クラウドセーブ（Firebase Realtime Database） ----------
+       合言葉を SHA-256 でハッシュ化した64文字の16進文字列をキーに、
+       /saves/<キー>.json へセーブ全体を預ける仕組み。合言葉そのものは
+       どこにも保存せず、導出したキーだけを、ゲームのセーブとは別の
+       localStorage キー（nekoKakuregaBarCloudV1）に保持する。
+       端末への自動保存（主役）とバックアップコードは従来どおりで、
+       クラウドはあくまで追加の選択肢。通信に失敗してもローカルの
+       セーブには一切触れない（読み込みの復元だけは、バックアップ
+       復元と同じ手順で saveSuppressed フラグを使ってから書き込む） */
+    var CLOUD_BASE = 'https://neko-bar-save-default-rtdb.asia-southeast1.firebasedatabase.app';
+    var CLOUD_PREFS_KEY = 'nekoKakuregaBarCloudV1';
+    function cloudLoadPrefs(){
+      var p = null;
+      try { p = JSON.parse(localStorage.getItem(CLOUD_PREFS_KEY) || 'null'); } catch(e){}
+      if (p && typeof p === 'object'){
+        return { key: (typeof p.key === 'string' && /^[0-9a-f]{64}$/.test(p.key)) ? p.key : '', auto: !!p.auto };
+      }
+      return { key:'', auto:false };
+    }
+    function cloudStorePrefs(p){
+      try { localStorage.setItem(CLOUD_PREFS_KEY, JSON.stringify({ key: p.key || '', auto: !!p.auto })); } catch(e){}
+    }
+    function cloudUrl(key){ return CLOUD_BASE + '/saves/' + key + '.json'; }
+    /* 合言葉 → SHA-256 の16進文字列（64文字）。crypto.subtle が無い
+       環境では null を返す（呼び出し側でその旨を表示する） */
+    function cloudHashPass(pass){
+      if (!window.crypto || !crypto.subtle || typeof crypto.subtle.digest !== 'function' || typeof TextEncoder === 'undefined'){
+        return Promise.resolve(null);
+      }
+      return crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass)).then(function(buf){
+        var bytes = new Uint8Array(buf), hex = '';
+        for (var i = 0; i < bytes.length; i++) hex += ('0' + bytes[i].toString(16)).slice(-2);
+        return hex;
+      }).catch(function(){ return null; });
+    }
+    /* タイムアウト付き fetch（15秒で諦めて失敗として扱う） */
+    function cloudFetch(url, opts){
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = null;
+      if (ctrl){
+        var merged = {}, k;
+        opts = opts || {};
+        for (k in opts) merged[k] = opts[k];
+        merged.signal = ctrl.signal;
+        opts = merged;
+        timer = setTimeout(function(){ try { ctrl.abort(); } catch(e){} }, 15000);
+      }
+      return fetch(url, opts).then(function(res){
+        if (timer) clearTimeout(timer);
+        return res;
+      }, function(err){
+        if (timer) clearTimeout(timer);
+        throw err;
+      });
+    }
+    /* 現在のセーブ全体をクラウドへ PUT する。成功で true、失敗は例外 */
+    function cloudUpload(key){
+      saveNow(); /* 保留中の変更も含め、最新の状態を送る */
+      var payload = { data: state, updatedAt: new Date().toISOString(), night: state.night, coins: state.coins };
+      return cloudFetch(cloudUrl(key), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function(res){
+        if (!res.ok) throw new Error('http ' + res.status);
+        return true;
+      });
+    }
+    /* クラウドのセーブを取得する。無い・壊れている場合は null、
+       通信失敗は例外（呼び出し側で表示を分ける） */
+    function cloudDownload(key){
+      return cloudFetch(cloudUrl(key), { method: 'GET' }).then(function(res){
+        if (!res.ok) throw new Error('http ' + res.status);
+        return res.json();
+      }).then(function(payload){
+        if (!payload || typeof payload !== 'object') return null;
+        var d = payload.data;
+        if (!d || Object.prototype.toString.call(d) !== '[object Object]') return null;
+        if (typeof d.v !== 'number' || typeof d.coins !== 'number' || typeof d.night !== 'number') return null;
+        return payload;
+      });
+    }
+    /* クラウドから復元する：バックアップ復元と同じく、自動保存の
+       上書き防止フラグ（saveSuppressed）で全保存経路を止めてから
+       書き込み、読み返して確認できたら再読み込みする。これで
+       再読み込み後に復元データが確かに残る */
+    function cloudRestore(data){
+      saveSuppressed = true;
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch(e){
+        saveSuppressed = false;
+        return false;
+      }
+      var written = null;
+      try { written = localStorage.getItem(SAVE_KEY); } catch(e){}
+      if (written !== JSON.stringify(data)){
+        saveSuppressed = false;
+        return false;
+      }
+      location.reload();
+      return true;
+    }
+    function cloudFmtDate(iso){
+      if (typeof iso !== 'string') return '';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      try { return d.toLocaleString('ja-JP'); } catch(e){ return d.toString(); }
+    }
+    /* 夜の精算後（「次の夜へ」を押した直後）の自動クラウド保存。
+       キー未設定・OFF・オフライン・失敗のときは何もせず、通常の
+       プレイを妨げない（ローカル保存には一切触れない） */
+    function cloudAutoSave(){
+      try {
+        var prefs = cloudLoadPrefs();
+        if (!prefs.key || !prefs.auto) return;
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+        cloudUpload(prefs.key).then(function(){}, function(){});
+      } catch(e){}
     }
     /* ---------- DOM参照ヘルパー ----------
        migrateState() の掲示板移行（boardRefresh → updateBoardBadge）が
@@ -7613,6 +7747,7 @@
       applyBgmTheme(); /* BGMを新しいテーマの音に切り替える */
       applySoundPrefs(); /* 新しいテーマに合わせて雨音の開始／停止も切り替える（雨の夜だけ流れる） */
       save(); renderStatus();
+      cloudAutoSave(); /* 精算が終わったので、自動保存ON＋合言葉設定済みならクラウドにも預ける（失敗しても無言で通常プレイを続ける） */
       closeModal();
       var th = currentTheme();
       toast('第' + state.night + '夜、開店です！', th.icon + ' 今夜は' + th.name + 'です（ノルマ ' + quotaFor(state.night) + 'コイン）');
@@ -9563,6 +9698,29 @@
             '</div>' +
             '<p class="backup-msg" id="backupMsg" role="status"></p>' +
           '</div>' +
+          '<div class="backup-box">' +
+            '<p class="backup-title">☁️ クラウドセーブ</p>' +
+            '<p class="vol-desc">合言葉を決めておくと、セーブをクラウドにも預けられます。別の端末で同じ合言葉を入れれば、続きから遊べます。端末への自動保存と上のバックアップコードは、今まで通りそのまま使えます。</p>' +
+            '<div id="cloudNoKey">' +
+              '<input type="password" id="cloudPass" class="cloud-pass" placeholder="合言葉を入力" autocomplete="new-password" aria-label="クラウドセーブの合言葉">' +
+              '<p class="vol-desc">合言葉は8文字以上を推奨します。合言葉そのものは保存されず、暗号化した鍵だけがこの端末に残ります。合言葉を忘れると、クラウドのセーブは取り出せなくなります。</p>' +
+              '<div class="backup-btns"><button class="backup-btn" id="cloudSetBtn" type="button">合言葉を設定する</button></div>' +
+            '</div>' +
+            '<div id="cloudHasKey" style="display:none">' +
+              '<p class="vol-desc">✅ 合言葉は設定済みです。この端末では、次回から合言葉の入力なしで使えます。</p>' +
+              '<div class="backup-btns">' +
+                '<button class="backup-btn" id="cloudSaveBtn" type="button">クラウドに保存</button>' +
+                '<button class="backup-btn" id="cloudLoadBtn" type="button">クラウドから読み込み</button>' +
+              '</div>' +
+              '<div class="cloud-auto-row"><span>夜の精算後に自動で保存</span>' +
+              '<button class="vol-toggle" id="cloudAutoToggle" type="button">OFF</button></div>' +
+              '<div class="backup-btns">' +
+                '<button class="backup-btn sub" id="cloudChangeBtn" type="button">合言葉を変更</button>' +
+                '<button class="backup-btn sub" id="cloudClearBtn" type="button">この端末から解除</button>' +
+              '</div>' +
+            '</div>' +
+            '<p class="backup-msg" id="cloudMsg" role="status"></p>' +
+          '</div>' +
           '<button id="resetBtn" type="button">セーブデータをリセット</button>' +
           '<p class="vol-desc">コイン・星・ずかん・ストーリーなどの記録をすべて消して、最初から始めます。</p></div>';
         body.innerHTML = html5;
@@ -9711,6 +9869,156 @@
             }
             location.reload();
           });
+        });
+        /* クラウドセーブ：合言葉の設定／変更／解除、手動の保存・
+           読み込み、自動保存トグル。通信に失敗してもローカルの
+           セーブには触れず、メッセージ表示だけにとどめる */
+        var cloudPrefs = cloudLoadPrefs();
+        var clMsg = $('cloudMsg'), clEditing = false, clBusy = false;
+        var clShowMsg = function(text, ok){
+          if (!clMsg) return;
+          clMsg.textContent = text;
+          clMsg.className = 'backup-msg ' + (ok ? 'ok' : 'err');
+        };
+        var clOffline = function(){
+          return (typeof navigator !== 'undefined' && navigator.onLine === false);
+        };
+        function cloudRender(){
+          var has = !!cloudPrefs.key;
+          var noKey = $('cloudNoKey'), hasKey = $('cloudHasKey');
+          if (noKey) noKey.style.display = (has && !clEditing) ? 'none' : '';
+          if (hasKey) hasKey.style.display = (has && !clEditing) ? '' : 'none';
+          var tg = $('cloudAutoToggle');
+          if (tg){
+            tg.textContent = cloudPrefs.auto ? 'ON' : 'OFF';
+            tg.classList.toggle('on', !!cloudPrefs.auto);
+          }
+        }
+        cloudRender();
+        var clSet = $('cloudSetBtn');
+        if (clSet) clSet.addEventListener('click', function(){
+          var input = $('cloudPass');
+          var pass = input ? input.value : '';
+          if (!pass){
+            clShowMsg('合言葉を入力してください。', false);
+            return;
+          }
+          clSet.disabled = true;
+          cloudHashPass(pass).then(function(hex){
+            clSet.disabled = false;
+            if (!hex){
+              clShowMsg('この環境では合言葉の暗号化が使えませんでした。別のブラウザでお試しください。', false);
+              return;
+            }
+            cloudPrefs.key = hex;
+            cloudStorePrefs(cloudPrefs);
+            clEditing = false;
+            if (input) input.value = '';
+            cloudRender();
+            clShowMsg(pass.length < 8
+              ? '合言葉を設定しました。ただし8文字未満は推測されやすいので、長めの合言葉への変更をおすすめします。'
+              : '合言葉を設定しました。「クラウドに保存」で今のセーブを預けられます。', true);
+          });
+        });
+        var clSave = $('cloudSaveBtn');
+        if (clSave) clSave.addEventListener('click', function(){
+          if (clBusy || !cloudPrefs.key) return;
+          if (clOffline()){
+            clShowMsg('オフラインのようです。通信できる場所で、もう一度お試しください（端末のセーブは無事です）。', false);
+            return;
+          }
+          clBusy = true; clSave.disabled = true;
+          clShowMsg('クラウドに保存しています…', true);
+          cloudUpload(cloudPrefs.key).then(function(){
+            clBusy = false; clSave.disabled = false;
+            clShowMsg('クラウドに保存しました（第' + state.night + '夜・コイン' + state.coins + '枚）。', true);
+          }, function(){
+            clBusy = false; clSave.disabled = false;
+            clShowMsg('クラウドへの保存に失敗しました。通信状態を確認してもう一度お試しください（端末のセーブは無事です）。', false);
+          });
+        });
+        var clLoad = $('cloudLoadBtn'), clArmed = false, clTimer = null, clPending = null;
+        if (clLoad) clLoad.addEventListener('click', function(){
+          if (clBusy || !cloudPrefs.key) return;
+          if (!clArmed){
+            if (clOffline()){
+              clShowMsg('オフラインのようです。通信できる場所で、もう一度お試しください（端末のセーブは無事です）。', false);
+              return;
+            }
+            clBusy = true; clLoad.disabled = true;
+            clShowMsg('クラウドを確認しています…', true);
+            cloudDownload(cloudPrefs.key).then(function(payload){
+              clBusy = false; clLoad.disabled = false;
+              if (!payload){
+                clShowMsg('この合言葉のクラウドセーブは、まだありません。「クラウドに保存」を押すと預けられます。', false);
+                return;
+              }
+              clPending = payload;
+              clArmed = true;
+              clLoad.textContent = '本当に読み込みますか？ 今のセーブに上書きされます（もう一度タップで実行）';
+              clLoad.classList.add('armed');
+              var night = (typeof payload.night === 'number') ? payload.night : payload.data.night;
+              var coins = (typeof payload.coins === 'number') ? payload.coins : payload.data.coins;
+              var when = cloudFmtDate(payload.updatedAt);
+              clShowMsg('クラウドのセーブを確認しました。第' + night + '夜・コイン' + coins + '枚' + (when ? '（保存日時：' + when + '）' : '') + 'のセーブです。よければ、もう一度ボタンを押してください。', true);
+              clTimer = setTimeout(function(){
+                clArmed = false; clPending = null;
+                clLoad.textContent = 'クラウドから読み込み';
+                clLoad.classList.remove('armed');
+              }, 10000);
+            }, function(){
+              clBusy = false; clLoad.disabled = false;
+              clShowMsg('クラウドへの接続に失敗しました。通信状態を確認してもう一度お試しください（端末のセーブは無事です）。', false);
+            });
+            return;
+          }
+          clearTimeout(clTimer);
+          clArmed = false;
+          clLoad.textContent = 'クラウドから読み込み';
+          clLoad.classList.remove('armed');
+          if (!clPending){
+            clShowMsg('読み込みを中止しました。今のセーブは変更されていません。', false);
+            return;
+          }
+          if (!cloudRestore(clPending.data)){
+            clShowMsg('保存に失敗しました。今のセーブは変更されていません。', false);
+          }
+        });
+        var clAuto = $('cloudAutoToggle');
+        if (clAuto) clAuto.addEventListener('click', function(){
+          cloudPrefs.auto = !cloudPrefs.auto;
+          cloudStorePrefs(cloudPrefs);
+          cloudRender();
+          clShowMsg(cloudPrefs.auto
+            ? '自動保存をONにしました。夜の精算が終わるたびに、クラウドへ保存します。'
+            : '自動保存をOFFにしました。', true);
+        });
+        var clChange = $('cloudChangeBtn');
+        if (clChange) clChange.addEventListener('click', function(){
+          clEditing = true;
+          cloudRender();
+          clShowMsg('新しい合言葉を入力して「合言葉を設定する」を押してください（今の合言葉は、新しい設定が終わるまで有効です）。', true);
+          var input = $('cloudPass');
+          if (input) input.focus();
+        });
+        var clClear = $('cloudClearBtn'), clClearArmed = false, clClearTimer = null;
+        if (clClear) clClear.addEventListener('click', function(){
+          if (!clClearArmed){
+            clClearArmed = true;
+            clClear.textContent = '本当に解除しますか？（もう一度タップで実行）';
+            clClearTimer = setTimeout(function(){
+              clClearArmed = false;
+              clClear.textContent = 'この端末から解除';
+            }, 5000);
+            return;
+          }
+          clearTimeout(clClearTimer);
+          cloudPrefs.key = '';
+          cloudPrefs.auto = false;
+          cloudStorePrefs(cloudPrefs);
+          clEditing = false;
+          cloudRender();
+          clShowMsg('この端末から合言葉を解除しました（クラウド上のセーブは消えていません。同じ合言葉を入れれば、また読み込めます）。', true);
         });
       }
     }
