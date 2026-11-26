@@ -630,6 +630,17 @@
         content:""; position:absolute; left:var(--tx,50%); bottom:-8px; transform:translateX(-50%);
         border:5px solid transparent; border-top:7px solid var(--ink); border-bottom:none;
       }
+      /* 中央の席（真ん中の席）の吹き出しだけ、横幅を本文に寄せる：
+         固定の広い幅や min-width は持たず、テキストの長さに応じた
+         fit-content で最大170pxまでに収め、左右パディングも
+         通常のセリフ吹き出し並みにコンパクト（6px 12px）にする。
+         左右の席の吹き出しと、縦位置（placeOrderBubble の段）は
+         従来のまま変えない。文章の折り返しは base の
+         text-wrap:balance が行の長さを均す */
+      .order-bubble.center-seat{
+        width:fit-content; min-width:0; max-width:170px;
+        padding:6px 12px;
+      }
       .order-bubble .ob-head{ display:block; }
       .order-bubble .ob-nw{ white-space:nowrap; }
       .order-bubble .ob-sub{ display:block; font-size:9px; font-weight:700; color:var(--wood); }
@@ -5333,13 +5344,19 @@
        セリフのはみ出しだけを防ぐ。他の注文吹き出し
        （通常・きまぐれ等）は元の大きさのままで、この処理は通らない */
     function fitTextBubbleWidth(b, layerW){
-      var maxW = Math.floor(layerW * 0.42);
+      /* 中央の席の吹き出しは CSS の上限（170px）を最大幅として
+         フィットさせる。それ以外は従来どおりステージ幅の42%まで */
+      var isCenter = b.classList.contains('center-seat');
+      var maxW = isCenter ? Math.min(170, layerW - 4) : Math.floor(layerW * 0.42);
       if (b.offsetWidth < maxW - 1) return; /* 折り返していない＝すでに本文幅 */
       var h0 = b.offsetHeight;
       var pw = 0;
       var pills = b.querySelectorAll('.ob-vip, .ob-memo, .ob-badge');
       for (var i = 0; i < pills.length; i++) pw = Math.max(pw, pills[i].offsetWidth);
-      var floor = Math.max(62, pw + 19); /* 左右パディング14px＋枠5px分 */
+      /* 下限の余白分：中央の席は左右パディング24px＋枠5px分、
+         それ以外は左右パディング14px＋枠5px分。中央の席には
+         固定の min-width（62px）も課さない */
+      var floor = isCenter ? pw + 29 : Math.max(62, pw + 19);
       var w = maxW;
       var fw = maxW;
       while (w - 2 >= floor){
@@ -5349,11 +5366,13 @@
         fw = w;
       }
       b.style.width = fw + 'px';
-      /* はみ出しチェック：最長行が内容幅（左右パディング14pxを
-         除いた幅）を超えていたら、収まるまで広げ直す */
+      /* はみ出しチェック：最長行が内容幅（左右パディングを除いた
+         幅）を超えていたら、収まるまで広げ直す。中央の席は
+         左右パディングが24pxなので、その分を差し引く */
+      var padX = isCenter ? 24 : 14;
       var guard = 0;
       while (guard++ < 80 && fw < maxW){
-        if (bubbleLongestLine(b) <= b.clientWidth - 14 + 1) break;
+        if (bubbleLongestLine(b) <= b.clientWidth - padX + 1) break;
         fw = Math.min(maxW, fw + 2);
         b.style.width = fw + 'px';
       }
@@ -5417,6 +5436,10 @@
         b.className = 'order-bubble';
         b.innerHTML = ((vipHtml || memoHtml) ? '<span class="ob-head">' + vipHtml + memoHtml + '</span>' : '') + '<span class="ob-main"><span class="ob-nw">' + order.name + '</span></span><span class="ob-sub">' + occ.name + 'の注文</span>';
       }
+      /* 中央の席の吹き出しだけ、横幅を本文に寄せる専用クラスを付ける
+         （幅・パディングの調整は CSS の .order-bubble.center-seat と
+         fitTextBubbleWidth の上限170pxが担う。左右の席は付けない） */
+      if (occ.seatIdx === 1) b.classList.add('center-seat');
       orderLayer.appendChild(b);
       occ.orderEl = b;
       fitOrderBubble(b, occ);
@@ -8153,10 +8176,14 @@
         }
         renderStatus();
         save();
+        /* 提供後の退店開始は少しだけ早める（1500ms→900ms）：
+           注文吹き出しは startLeave で消えるため、お礼の一言
+           吹き出しと重なる時間が短くなり、一言が読みやすくなる。
+           喜び演出（happy）が唐突に切れない程度の短縮にとどめる */
         setTimeout(function(){
           occ.el.classList.remove('happy');
           startLeave(seatIdx);
-        }, 1500);
+        }, 900);
       }, 2300);
     }
 
