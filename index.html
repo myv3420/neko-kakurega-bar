@@ -5408,6 +5408,35 @@
         nameEl.style.fontSize = shrunk + 'px';
       }
     }
+    /* 文章系の吹き出し（お悩み相談・こだわり・きまぐれ）の横幅は、
+       生成時に fitTextBubbleWidth がインラインの width で固定する。
+       そのため、Webフォント（M PLUS Rounded 1c）の読み込み前に
+       吹き出しが作られると、仮フォントの寸法で測った幅のまま
+       固定されてしまい、フォントが差し替わった後は本文が広がっても
+       箱だけが最大幅のまま残る（通常注文は CSS の fit-content が
+       フォント差し替えに自動で追従するので影響を受けない）。
+       対策として、フォント読み込み完了・画面リサイズ・吹き出し
+       生成直後の遅延タイミングで、表示中の全吹き出しのインライン幅を
+       一度外してから測り直す（再フィット）。測り直しは正しいフォントの
+       寸法で行われるので、本文に寄った幅に収まる */
+    function refitOrderBubbles(){
+      for (var i = 0; i < occupants.length; i++){
+        var o = occupants[i];
+        if (o && o.orderEl){
+          o.orderEl.style.width = '';
+          fitOrderBubble(o.orderEl, o);
+        }
+      }
+    }
+    var refitBubbleTimer = 0;
+    function scheduleRefitOrderBubbles(){
+      if (refitBubbleTimer) clearTimeout(refitBubbleTimer);
+      refitBubbleTimer = setTimeout(refitOrderBubbles, 1200);
+    }
+    if (document.fonts && document.fonts.ready && document.fonts.ready.then){
+      document.fonts.ready.then(function(){ refitOrderBubbles(); });
+    }
+    window.addEventListener('resize', refitOrderBubbles);
     function addOrderBubble(occ){
       if (occ.orderEl) return;
       var b = document.createElement('span');
@@ -5456,6 +5485,9 @@
       occ.orderEl = b;
       fitOrderBubble(b, occ);
       placeOrderBubble(b, occ); /* 縦位置は天井エリアの2段のうち席に対応する段に合わせる */
+      /* 生成時点では Webフォントがまだ読み込み中かもしれないので、
+         少し置いてから全吹き出しを測り直す（refitOrderBubbles 参照） */
+      scheduleRefitOrderBubbles();
     }
 
     /* ポーズ画像の取得：flip=true なら左右反転版を返す。
