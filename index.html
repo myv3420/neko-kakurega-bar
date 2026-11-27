@@ -1540,6 +1540,13 @@
         border-color:var(--ink); text-shadow:0 1px 0 rgba(74,53,37,.4); box-shadow:0 3px 0 var(--ink);
       }
       .settings-tab:focus-visible{ outline:3px solid var(--accent); outline-offset:2px; }
+      /* 設定モーダル最下部の著作権表記：目立ちすぎないよう小さく控えめに */
+      .settings-copyright{
+        margin:18px 0 2px; padding-top:12px;
+        border-top:1px solid #E4D2AC;
+        font-size:10px; font-weight:700; line-height:1.6;
+        color:#A68B64; text-align:center;
+      }
       /* クラウドセーブ欄の注意事項リスト */
       .cloud-notes{ margin:8px 0 2px; padding:0; list-style:none; }
       .cloud-notes li{
@@ -11860,6 +11867,7 @@
           '<button id="resetBtn" type="button">セーブデータをリセット</button>' +
           '<p class="vol-desc">コイン・星・ずかん・ストーリーなどの記録をすべて消して、最初から始めます。</p>';
         }
+        html5 += '<p class="settings-copyright">© 2026 Yuki / ねこ隠れ家BAR All Rights Reserved. 無断転載・無断複製禁止</p>';
         body.innerHTML = html5;
         /* 設定内タブ（サウンド／セーブ）の切り替え：タブ状態は
            settingsTab に持ち、再描画で内容を差し替える */
